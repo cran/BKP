@@ -90,7 +90,12 @@ print.DKP <- function(x, ...) {
   cat(sprintf("Loss function used:          %s\n", loss))
   cat(sprintf("Optimized kernel parameters: %s\n",
               paste(sprintf("%.4f", theta), collapse = ", ")))
-  cat(sprintf("Minimum achieved loss:       %.5f\n", loss_min))
+  if (!is.na(loss_min)) {
+    cat(sprintf("Minimum achieved loss:       %.5f\n", loss_min))
+    cat("Kernel parameters were obtained by optimization.\n")
+  } else {
+    cat("Note: Kernel parameters were user-specified (no optimization).\n")
+  }
   cat("\n")
 
   cat("Prior specification:\n")
@@ -100,7 +105,8 @@ print.DKP <- function(x, ...) {
   } else if (prior == "fixed") {
     cat("  Fixed informative prior shared across locations.\n")
     cat(sprintf("  r0:      %.3f\n", r0))
-    cat(sprintf("  p0:      %.3f\n", p0))
+    cat("  p0:     ", paste(sprintf("%.3f", p0), collapse = ", "), "\n")
+
   } else if (prior == "noninformative") {
     cat("  Noninformative prior: Dirichlet(1,...,1).\n")
   }

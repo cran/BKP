@@ -30,6 +30,10 @@
 #' kernel smoothing the observed proportions \code{y/m}, and precision \code{r0}
 #' is distributed accordingly.
 #'
+#' @references Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
+#'   Kernel Process Modeling}.  arXiv.
+#'   https://doi.org/10.48550/arXiv.2508.10447.
+#'
 #' @examples
 #' # Simulated data
 #' set.seed(123)
@@ -82,11 +86,13 @@ get_prior <- function(prior = c("noninformative", "fixed", "adaptive"),
     W <- K / rowSums(K)   # m * n
 
     # Estimated mean and precision
-    p_hat <- as.vector(W %*% (y / m))          # Estimated prior mean
-    r_hat <- r0 * rowSums(K) + 1e-10           # Estimated prior precision
+    p_hat <- as.vector(W %*% (y / m))   # Estimated prior mean
+    r_hat <- r0 * rowSums(K)            # Estimated prior precision
 
     alpha0 <- r_hat * p_hat
     beta0  <- r_hat * (1 - p_hat)
+    alpha0 <- pmax(alpha0, 1e-3)
+    beta0 <- pmax(beta0, 1e-3)
   }
   return(list(alpha0 = alpha0, beta0 = beta0))
 }

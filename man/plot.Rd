@@ -6,9 +6,9 @@
 \alias{plot.DKP}
 \title{Plot Fitted BKP or DKP Models}
 \usage{
-\method{plot}{BKP}(x, only_mean = FALSE, ...)
+\method{plot}{BKP}(x, only_mean = FALSE, n_grid = 80, ...)
 
-\method{plot}{DKP}(x, only_mean = FALSE, ...)
+\method{plot}{DKP}(x, only_mean = FALSE, n_grid = 80, ...)
 }
 \arguments{
 \item{x}{An object of class \code{"BKP"} or \code{"DKP"}, typically returned
@@ -17,6 +17,11 @@ by \code{\link{fit.BKP}} or \code{\link{fit.DKP}}.}
 \item{only_mean}{Logical. If \code{TRUE}, only the predicted mean surface is
 plotted for 2D inputs (only applies to \code{BKP} models). Default is
 \code{FALSE}.}
+
+\item{n_grid}{Integer. Number of grid points used in each dimension to
+construct the prediction grid. A larger value produces a smoother and more
+detailed decision boundary, but increases computational cost.
+Default is \code{80}.}
 
 \item{...}{Additional arguments passed to internal plotting routines
 (currently unused).}
@@ -39,24 +44,24 @@ covariates:
 \itemize{
 \item \strong{1D inputs:}
 \itemize{
-\item For \code{BKP}, the function plots the posterior mean curve with a 95\% credible band, along with the observed proportions (\eqn{y/m}).
-\item For \code{DKP}, the function plots one curve per class, each with a shaded credible interval and observed multinomial class frequencies.
+\item For \code{BKP} (binary/binomial data), plots the posterior mean curve with a 95\% credible band, overlaid with the observed proportions (\eqn{y/m}).
+\item For \code{DKP} (categorical/multinomial data), plots one curve per class, each with a shaded credible interval and the observed class frequencies.
+\item For classification tasks, an optional curve of the maximum posterior class probability can be displayed to visualize decision confidence.
 }
 
 \item \strong{2D inputs:}
 \itemize{
-\item For both models, the function produces a 2-by-2 panel of contour plots for each class (or the success class in BKP), showing:
+\item For both models, produces either:
 \enumerate{
-\item Predictive mean surface
-\item Predictive 97.5th percentile surface (upper bound of 95\% credible interval)
-\item Predictive variance surface
-\item Predictive 2.5th percentile surface (lower bound of 95\% credible interval)
+\item A predictive mean surface (optionally maximum posterior probability for classification), or
+\item A 2-by-2 panel of contour plots showing: predictive mean, predictive 97.5th percentile (upper bound of 95\% credible interval), predictive variance, and predictive 2.5th percentile (lower bound).
 }
+\item For DKP, these surfaces are generated separately for each class.
 }
 }
 
-For input dimensions greater than 2, the function will terminate with an
-error.
+For input dimensions greater than two, the function terminates with an
+error message.
 }
 \examples{
 # ============================================================== #
@@ -115,7 +120,7 @@ y <- rbinom(n, size = m, prob = true_pi)
 model2 <- fit.BKP(X, y, m, Xbounds=Xbounds)
 
 # Plot results
-plot(model2)
+plot(model2, n_grid = 50)
 
 # ============================================================== #
 # ========================= DKP Examples ======================= #
@@ -177,8 +182,13 @@ Y <- t(sapply(1:n, function(i) rmultinom(1, size = m[i], prob = true_pi[i, ])))
 model2 <- fit.DKP(X, Y, Xbounds = Xbounds)
 
 # Plot results
-plot(model2)
+plot(model2, n_grid = 50)
 
+}
+\references{
+Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
+Kernel Process Modeling}.  arXiv.
+https://doi.org/10.48550/arXiv.2508.10447.
 }
 \seealso{
 \code{\link{fit.BKP}}, \code{\link{predict.BKP}},

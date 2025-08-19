@@ -14,6 +14,10 @@
 #' @seealso \code{\link{loss_fun_dkp}}, \code{\link{fit.BKP}}, \code{\link{get_prior}},
 #'   \code{\link{kernel_matrix}}
 #'
+#' @references Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
+#'   Kernel Process Modeling}.  arXiv.
+#'   https://doi.org/10.48550/arXiv.2508.10447.
+#'
 #' @examples
 #' set.seed(123)
 #' n = 10
@@ -35,8 +39,6 @@ loss_fun <- function(
   loss <- match.arg(loss)
   kernel <- match.arg(kernel)
 
-  n <- length(y)
-
   # Convert gamma to kernel hyperparameters (theta = 10^gamma)
   theta <- 10^gamma
 
@@ -55,10 +57,6 @@ loss_fun <- function(
   # Compute posterior alpha and beta
   alpha_n <- alpha0 + as.vector(K %*% y)
   beta_n <- beta0 + as.vector(K %*% (m - y))
-
-  # Numerical stabilization: avoid log(0) or NaNs
-  alpha_n <- pmax(alpha_n, 1e-10)
-  beta_n  <- pmax(beta_n, 1e-10)
 
   # Posterior mean prediction of success probability
   pi_hat <- alpha_n / (alpha_n + beta_n)

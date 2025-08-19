@@ -10,7 +10,7 @@
 #' @param Xnew A numeric matrix (or vector) of new input locations where
 #'   predictions are desired.
 #' @param CI_level Credible level for prediction intervals (default is
-#'   \code{0.05}, corresponding to 95% CI).
+#'   \code{0.95}, corresponding to 95% CI).
 #' @param threshold Classification threshold for binary prediction based on
 #'   posterior mean (used only for BKP; default is \code{0.5}).
 #' @param ... Additional arguments passed to generic \code{predict} methods
@@ -35,6 +35,10 @@
 #'   \code{\link{fit.DKP}} for fitting Dirichlet Kernel Process models.
 #'   \code{\link{plot.BKP}} for visualizing fitted BKP models.
 #'   \code{\link{plot.DKP}} for visualizing fitted DKP models.
+#'
+#' @references Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
+#'   Kernel Process Modeling}.  arXiv.
+#'   https://doi.org/10.48550/arXiv.2508.10447.
 #'
 #' @keywords BKP
 #'
@@ -61,8 +65,9 @@
 #' # Fit BKP model
 #' model1 <- fit.BKP(X, y, m, Xbounds=Xbounds)
 #'
-#' Xnew = matrix(seq(-2, 2, length = 100), ncol=1) #new data points
-#' head(predict(model1, Xnew))
+#' # Prediction
+#' Xnew = matrix(seq(-2, 2, length = 10), ncol=1) #new data points
+#' predict(model1, Xnew)
 #'
 #'
 #' #-------------------------- 2D Example ---------------------------
@@ -94,15 +99,16 @@
 #' # Fit BKP model
 #' model2 <- fit.BKP(X, y, m, Xbounds=Xbounds)
 #'
-#' x1 <- seq(Xbounds[1,1], Xbounds[1,2], length.out = 100)
-#' x2 <- seq(Xbounds[2,1], Xbounds[2,2], length.out = 100)
+#' # Prediction
+#' x1 <- seq(Xbounds[1,1], Xbounds[1,2], length.out = 10)
+#' x2 <- seq(Xbounds[2,1], Xbounds[2,2], length.out = 10)
 #' Xnew <- expand.grid(x1 = x1, x2 = x2)
-#' head(predict(model2, Xnew))
+#' predict(model2, Xnew)
 #'
 #' @export
 #' @method predict BKP
 
-predict.BKP <- function(object, Xnew, CI_level = 0.05, threshold = 0.5, ...)
+predict.BKP <- function(object, Xnew, CI_level = 0.95, threshold = 0.5, ...)
 {
   if (!inherits(object, "BKP")) {
     stop("The input is not of class 'BKP'. Please provide a model fitted with 'fit.BKP()'.")
@@ -144,16 +150,16 @@ predict.BKP <- function(object, Xnew, CI_level = 0.05, threshold = 0.5, ...)
   beta0 <- prior_par$beta0
 
   # Posterior parameters
-  alpha_n <- alpha0 + as.vector(K %*% y)
-  beta_n  <- beta0 + as.vector(K %*% (m - y))
+  alpha_n <- pmax(alpha0 + as.vector(K %*% y), 1e-6)
+  beta_n  <- pmax(beta0 + as.vector(K %*% (m - y)), 1e-6)
 
   # Predictive mean and variance
   pi_mean <- alpha_n / (alpha_n + beta_n)
   pi_var  <- pi_mean * (1 - pi_mean) / (alpha_n + beta_n + 1)
 
   # Credible intervals
-  pi_lower <- qbeta(CI_level / 2, alpha_n, beta_n)
-  pi_upper <- qbeta(1 - CI_level / 2, alpha_n, beta_n)
+  pi_lower <- qbeta((1 - CI_level) / 2, alpha_n, beta_n)
+  pi_upper <- qbeta((1 + CI_level) / 2, alpha_n, beta_n)
 
 
   # Output
@@ -168,6 +174,7 @@ predict.BKP <- function(object, Xnew, CI_level = 0.05, threshold = 0.5, ...)
   # Posterior classification label (only for classification data)
   if (all(m == 1)) {
     prediction$class <- ifelse(pi_mean > threshold, 1, 0)
+    prediction$threshold <- threshold
   }
 
   return(prediction)

@@ -24,6 +24,10 @@
 #' smoothing of the observed relative frequencies in \code{Y}, scaled by
 #' \code{r0}.
 #'
+#' @references Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
+#'   Kernel Process Modeling}.  arXiv.
+#'   https://doi.org/10.48550/arXiv.2508.10447.
+#'
 #' @examples
 #' # Simulated multi-class data
 #' set.seed(123)
@@ -73,7 +77,6 @@ get_prior_dkp <- function(prior = c("noninformative", "fixed", "adaptive"),
     # Return a constant prior for all prediction points (say, m points)
     m <- if (!is.null(K)) nrow(K) else 1
     alpha0 <- matrix(1, nrow = m, ncol = q)
-
   } else if (prior == "fixed") {
     # Validate inputs
     if (r0 <= 0) stop("r0 must be positive.")
@@ -100,11 +103,12 @@ get_prior_dkp <- function(prior = c("noninformative", "fixed", "adaptive"),
     Pi_hat <- W %*% (Y / rowSums(Y))  # m * q
 
     # Estimate local precision
-    r_hat <- r0 * rowSums(K) + 1e-10  # m * 1
+    r_hat <- r0 * rowSums(K)          # m * 1
 
     # Compute prior parameters
     alpha0 <- Pi_hat * r_hat
   }
+  alpha0 <- pmax(alpha0, 1e-3)
   return(alpha0 = alpha0)
 }
 

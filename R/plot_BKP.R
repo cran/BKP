@@ -12,6 +12,10 @@
 #' @param only_mean Logical. If \code{TRUE}, only the predicted mean surface is
 #'   plotted for 2D inputs (only applies to \code{BKP} models). Default is
 #'   \code{FALSE}.
+#' @param n_grid Integer. Number of grid points used in each dimension to
+#'   construct the prediction grid. A larger value produces a smoother and more
+#'   detailed decision boundary, but increases computational cost.
+#'   Default is \code{80}.
 #' @param ... Additional arguments passed to internal plotting routines
 #'   (currently unused).
 #'
@@ -25,27 +29,31 @@
 #' \itemize{
 #'   \item \strong{1D inputs:}
 #'     \itemize{
-#'       \item For \code{BKP}, the function plots the posterior mean curve with a 95% credible band, along with the observed proportions (\eqn{y/m}).
-#'       \item For \code{DKP}, the function plots one curve per class, each with a shaded credible interval and observed multinomial class frequencies.
+#'       \item For \code{BKP} (binary/binomial data), plots the posterior mean curve with a 95% credible band, overlaid with the observed proportions (\eqn{y/m}).
+#'       \item For \code{DKP} (categorical/multinomial data), plots one curve per class, each with a shaded credible interval and the observed class frequencies.
+#'       \item For classification tasks, an optional curve of the maximum posterior class probability can be displayed to visualize decision confidence.
 #'     }
 #'
 #'   \item \strong{2D inputs:}
 #'     \itemize{
-#'       \item For both models, the function produces a 2-by-2 panel of contour plots for each class (or the success class in BKP), showing:
+#'       \item For both models, produces either:
 #'         \enumerate{
-#'           \item Predictive mean surface
-#'           \item Predictive 97.5th percentile surface (upper bound of 95% credible interval)
-#'           \item Predictive variance surface
-#'           \item Predictive 2.5th percentile surface (lower bound of 95% credible interval)
+#'           \item A predictive mean surface (optionally maximum posterior probability for classification), or
+#'           \item A 2-by-2 panel of contour plots showing: predictive mean, predictive 97.5th percentile (upper bound of 95% credible interval), predictive variance, and predictive 2.5th percentile (lower bound).
 #'         }
+#'       \item For DKP, these surfaces are generated separately for each class.
 #'     }
 #' }
 #'
-#'   For input dimensions greater than 2, the function will terminate with an
-#'   error.
+#'   For input dimensions greater than two, the function terminates with an
+#'   error message.
 #'
 #' @seealso \code{\link{fit.BKP}}, \code{\link{predict.BKP}},
 #'   \code{\link{fit.DKP}}, \code{\link{predict.DKP}}
+#'
+#' @references Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
+#'   Kernel Process Modeling}.  arXiv.
+#'   https://doi.org/10.48550/arXiv.2508.10447.
 #'
 #' @keywords BKP DKP
 #'
@@ -106,12 +114,12 @@
 #' model2 <- fit.BKP(X, y, m, Xbounds=Xbounds)
 #'
 #' # Plot results
-#' plot(model2)
+#' plot(model2, n_grid = 50)
 #'
 #' @export
 #' @method plot BKP
 
-plot.BKP <- function(x, only_mean = FALSE, ...){
+plot.BKP <- function(x, only_mean = FALSE, n_grid = 80, ...){
   if (!inherits(x, "BKP")) {
     stop("The input is not of class 'BKP'. Please provide a model fitted with 'fit.BKP()'.")
   }
@@ -129,19 +137,20 @@ plot.BKP <- function(x, only_mean = FALSE, ...){
   if (d == 1){
     #----- Plotting for 1-dimensional covariate data (d == 1) -----#
     # Generate new X values for a smooth prediction curve.
-    Xnew <- matrix(seq(Xbounds[1], Xbounds[2], length.out = 100), ncol = 1)
+    Xnew <- matrix(seq(Xbounds[1], Xbounds[2], length.out = 10 * n_grid), ncol = 1)
 
     # Get the prediction for the new X values.
     prediction <- predict.BKP(BKPmodel, Xnew, ...)
+    is_classification <- !is.null(prediction$class)
 
     # Initialize the plot with the estimated probability curve.
     plot(Xnew, prediction$mean,
          type = "l", col = "blue", lwd = 2,
-         xlab = "x (Input Variable)", ylab = "Probability",
+         xlab = "x", ylab = "Probability",
          main = "Estimated Probability",
          xlim = Xbounds,
-         ylim = c(max(0, min(prediction$mean)-0.1),
-                  min(1, max(prediction$mean)+0.2)))
+         ylim = c(min(prediction$lower) * 0.9,
+                  min(1, max(prediction$upper) * 1.1)))
 
     # Add a shaded credible interval band using polygon.
     polygon(c(Xnew, rev(Xnew)),
@@ -152,20 +161,32 @@ plot.BKP <- function(x, only_mean = FALSE, ...){
     # Overlay observed proportions (y/m) as points.
     points(X, y / m, pch = 20, col = "red")
 
-    # Add a legend to explain plot elements.
-    legend("topright",
-           legend = c("Estimated Probability",
-                      paste0((1 - prediction$CI_level)*100, "% Credible Interval"),
-                      "Observed Proportions"),
-           col = c("blue", "lightgrey", "red"), bty = "n",
-           lwd = c(2, 8, NA), pch = c(NA, NA, 20), lty = c(1, 1, NA))
+    if(is_classification){
+      abline(h = prediction$threshold, lty = 2, lwd = 1.2)
+      text(x = Xbounds[2],
+           y = prediction$threshold + 0.02,
+           labels = "threshold",
+           adj = c(1, 0.5),
+           cex = 0.9,
+           col = "black")
+    }else{
+      # Add a legend to explain plot elements.
+      legend("topleft",
+             legend = c("Estimated Probability",
+                        paste0(prediction$CI_level * 100, "% Credible Interval"),
+                        "Observed Proportions"),
+             col = c("blue", "lightgrey", "red"), bty = "n",
+             lwd = c(2, 8, NA), pch = c(NA, NA, 20), lty = c(1, 1, NA))
+    }
+
   } else if (d == 2){
     #----- Plotting for 2-dimensional covariate data (d == 2) -----#
     # Generate 2D prediction grid
-    x1 <- seq(Xbounds[1, 1], Xbounds[1, 2], length.out = 80)
-    x2 <- seq(Xbounds[2, 1], Xbounds[2, 2], length.out = 80)
+    x1 <- seq(Xbounds[1, 1], Xbounds[1, 2], length.out = n_grid)
+    x2 <- seq(Xbounds[2, 1], Xbounds[2, 2], length.out = n_grid)
     grid <- expand.grid(x1 = x1, x2 = x2)
     prediction <- predict.BKP(BKPmodel, as.matrix(grid), ...)
+    is_classification <- !is.null(prediction$class)
 
     # Convert to data frame for levelplot
     df <- data.frame(x1 = grid$x1, x2 = grid$x2,
@@ -177,17 +198,30 @@ plot.BKP <- function(x, only_mean = FALSE, ...){
 
     if (only_mean) {
       # Only plot the predicted mean graphs
-      my_2D_plot_fun("Mean", "Predictive Mean", df)
+      if(is_classification){
+        p1 <- my_2D_plot_fun("Mean", "Predicted Class Probability (Predictive Mean)", df, X = X, y = y)
+      }else{
+        p1 <- my_2D_plot_fun("Mean", "Predictive Mean", df)
+      }
+      print(p1)
     } else {
-      # Create 4 plots
-      p1 <- my_2D_plot_fun("Mean", "Predictive Mean", df)
-      p2 <- my_2D_plot_fun("Upper", paste0((1 - prediction$CI_level)*100, "% CI Upper"), df)
-      p3 <- my_2D_plot_fun("Variance", "Predictive Variance", df)
-      # p3 <- plot_fun("Width", "CI Width")
-      p4 <- my_2D_plot_fun("Lower", paste0((1 - prediction$CI_level)*100, "% CI Lower"), df)
-
-      # Arrange into 2×2 layout
-      grid.arrange(p1, p2, p3, p4, ncol = 2)
+      # Create 2 or 4 plots
+      if(is_classification){
+        p1 <- my_2D_plot_fun("Mean", "Predictive Mean", df, X = X, y = y)
+        p3 <- my_2D_plot_fun("Variance", "Predictive Variance", df, X = X, y = y)
+      }else{
+        p1 <- my_2D_plot_fun("Mean", "Predictive Mean", df)
+        p3 <- my_2D_plot_fun("Variance", "Predictive Variance", df)
+      }
+      if(is_classification){
+        # Arrange into 1×2 layout
+        grid.arrange(p1, p3, ncol = 2)
+      }else{
+        p2 <- my_2D_plot_fun("Upper", paste0(prediction$CI_level * 100, "% CI Upper"), df)
+        p4 <- my_2D_plot_fun("Lower", paste0(prediction$CI_level * 100, "% CI Lower"), df)
+        # Arrange into 2×2 layout
+        grid.arrange(p1, p2, p3, p4, ncol = 2)
+      }
     }
   } else {
     # --- Error handling for higher dimensions ---

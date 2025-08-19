@@ -63,12 +63,12 @@
 #' model2 <- fit.DKP(X, Y, Xbounds = Xbounds)
 #'
 #' # Plot results
-#' plot(model2)
+#' plot(model2, n_grid = 50)
 #'
 #' @export
 #' @method plot DKP
 
-plot.DKP <- function(x, only_mean = FALSE, ...){
+plot.DKP <- function(x, only_mean = FALSE, n_grid = 80, ...){
   if (!inherits(x, "DKP")) {
     stop("The input is not of class 'DKP'. Please provide a model fitted with 'fit.DKP()'.")
   }
@@ -83,80 +83,127 @@ plot.DKP <- function(x, only_mean = FALSE, ...){
   d <- ncol(X)    # Dimensionality.
   q <- ncol(Y)    # Dimensionality.
 
+  # old_par <- par(ask = TRUE)
+
   if (d == 1){
     #----- Plotting for 1-dimensional covariate data (d == 1) -----#
-    # Generate new X values for a smooth prediction curve.
-    Xnew <- matrix(seq(Xbounds[1], Xbounds[2], length.out = 100), ncol = 1)
 
-    # Get the prediction for the new X values.
+    # Generate new X values for smooth prediction
+    Xnew <- matrix(seq(Xbounds[1], Xbounds[2], length.out = 10 * n_grid), ncol = 1)
     prediction <- predict.DKP(DKPmodel, Xnew, ...)
+    is_classification <- !is.null(prediction$class)
 
+    old_par <- par(mfrow = c(2, 2))
+    # on.exit(par(old_par))  # Restore par on exit
+
+    # --- First panel: all mean curves together ---
+    if(is_classification){
+      cols <- rainbow(q)
+      plot(NA, xlim = Xbounds, ylim = c(-0.1, 1.1),
+           xlab = "x", ylab = "Probability",
+           main = "Estimated Mean Curves (All Classes)")
+      for (j in 1:q) {
+        lines(Xnew, prediction$mean[, j], col = cols[j], lwd = 2)
+      }
+      for (i in 1:nrow(X)) {
+        class_idx <- which.max(Y[i, ])
+        points(X[i], -0.05, col = cols[class_idx], pch = 20)
+      }
+      legend("top", legend = paste("Class", 1:q), col = cols, lty = 1, lwd = 2,
+             horiz = TRUE, bty = "n")
+    }
+
+    # --- Remaining panels: each class with CI + obs ---
     for (j in 1:q) {
-      mean_j <- prediction$mean[, j]
+      mean_j  <- prediction$mean[, j]
       lower_j <- prediction$lower[, j]
       upper_j <- prediction$upper[, j]
-      # Initialize the plot with the estimated probability curve.
+
+      # Start plot for class j
+      if (is_classification) {
+        ylim = c(0, 1)
+      }else{
+        ylim = c(min(lower_j) * 0.9, min(1, max(upper_j) * 1.1))
+      }
       plot(Xnew, mean_j,
            type = "l", col = "blue", lwd = 2,
-           xlab = "x (Input Variable)", ylab = "Probability",
-           main = paste0("Estimated Probability (class ", j, ")"),
+           xlab = "x", ylab = "Probability",
+           main = paste0("Estimated Probability (Class ", j, ")"),
            xlim = Xbounds,
-           ylim = c(max(0, min(mean_j)-0.1),
-                    min(1, max(mean_j)+0.2)))
+           ylim = ylim)
 
-      # Add a shaded Credible interval band using polygon.
+      # Shaded CI
       polygon(c(Xnew, rev(Xnew)),
               c(lower_j, rev(upper_j)),
               col = "lightgrey", border = NA)
       lines(Xnew, mean_j, col = "blue", lwd = 2)
 
-      # Overlay observed proportions (y/m) as points.
-      points(X, Y[,j] / rowSums(Y), pch = 20, col = "red")
+      # If class label is known, show binary observed indicator (1 if this class, 0 otherwise)
+      if (is_classification) {
+        obs_j <- as.integer(apply(Y, 1, which.max) == j)
+        points(X, obs_j, pch = 20, col = "red")
+      } else {
+        # Proportions from multinomial
+        points(X, Y[, j] / rowSums(Y), pch = 20, col = "red")
 
-      # Add a legend to explain plot elements.
-      legend("topright",
-             legend = c("Estimated Probability",
-                        paste0((1 - prediction$CI_level)*100, "% Credible Interval"),
-                        "Observed Proportions"),
-             col = c("blue", "lightgrey", "red"), bty = "n",
-             lwd = c(2, 8, NA), pch = c(NA, NA, 20), lty = c(1, 1, NA))
+        # Legend
+        if(j == 1) {
+          legend("topleft",
+                 legend = c("Estimated Probability",
+                            paste0(prediction$CI_level * 100, "% CI"),
+                            "Observed"),
+                 col = c("blue", "lightgrey", "red"),
+                 lwd = c(2, 8, NA), pch = c(NA, NA, 20), lty = c(1, 1, NA),
+                 bty = "n")
+        }
+      }
     }
-
-
-
   } else if (d == 2){
     #----- Plotting for 2-dimensional covariate data (d == 2) -----#
     # Generate 2D prediction grid
-    x1 <- seq(Xbounds[1, 1], Xbounds[1, 2], length.out = 80)
-    x2 <- seq(Xbounds[2, 1], Xbounds[2, 2], length.out = 80)
+    x1 <- seq(Xbounds[1, 1], Xbounds[1, 2], length.out = n_grid)
+    x2 <- seq(Xbounds[2, 1], Xbounds[2, 2], length.out = n_grid)
     grid <- expand.grid(x1 = x1, x2 = x2)
     prediction <- predict.DKP(DKPmodel, as.matrix(grid))
+    is_classification <- !is.null(prediction$class)
 
-    for (j in 1:q) {
+    if(is_classification){
       df <- data.frame(x1 = grid$x1, x2 = grid$x2,
-                       Mean = prediction$mean[, j],
-                       Upper = prediction$upper[, j],
-                       Lower = prediction$lower[, j],
-                       Variance = prediction$variance[, j])
+                       class = factor(prediction$class),
+                       max_prob = apply(prediction$mean, 1, max))
 
-      if (only_mean) {
-        # Only plot the predicted mean graphs
-        my_2D_plot_fun("Mean", "Predictive Mean", df)
-      } else {
-        # Create 4 plots
-        p1 <- my_2D_plot_fun("Mean", "Predictive Mean", df)
-        p2 <- my_2D_plot_fun("Upper", paste0((1 - prediction$CI_level)*100, "% CI Upper"), df)
-        p3 <- my_2D_plot_fun("Variance", "Predictive Variance", df)
-        p4 <- my_2D_plot_fun("Lower", paste0((1 - prediction$CI_level)*100, "% CI Lower"), df)
+      p1 <- my_2D_plot_fun_class("class", "Predicted Classes", df, X, Y)
+      p2 <- my_2D_plot_fun_class("max_prob", "Maximum Predicted Probability", df, X, Y, classification = FALSE)
+      grid.arrange(p1, p2, ncol = 2)
+    }else{
+      for (j in 1:q) {
+        df <- data.frame(x1 = grid$x1, x2 = grid$x2,
+                         Mean = prediction$mean[, j],
+                         Upper = prediction$upper[, j],
+                         Lower = prediction$lower[, j],
+                         Variance = prediction$variance[, j])
 
-        # Arrange into 2×2 layout
-        grid.arrange(p1, p2, p3, p4, ncol = 2,
-                     top = textGrob(paste0("Estimated Probability (class ", j, ")"),
-                                    gp = gpar(fontface = "bold", fontsize = 16)))
+        if (only_mean) {
+          # Only plot the predicted mean graphs
+          p1 <- my_2D_plot_fun("Mean", "Predictive Mean", df)
+          print(p1)
+        } else {
+          # Create 4 plots
+          p1 <- my_2D_plot_fun("Mean", "Predictive Mean", df)
+          p2 <- my_2D_plot_fun("Upper", paste0(prediction$CI_level * 100, "% CI Upper"), df)
+          p3 <- my_2D_plot_fun("Variance", "Predictive Variance", df)
+          p4 <- my_2D_plot_fun("Lower", paste0(prediction$CI_level * 100, "% CI Lower"), df)
+          # Arrange into 2×2 layout
+          grid.arrange(p1, p2, p3, p4, ncol = 2,
+                       top = textGrob(paste0("Estimated Probability (Class ", j, ")"),
+                                      gp = gpar(fontface = "bold", fontsize = 16)))
+        }
       }
     }
   } else {
     # --- Error handling for higher dimensions ---
     stop("plot.DKP() only supports data where the dimensionality of X is 1 or 2.")
   }
+
+  # par(old_par)
 }

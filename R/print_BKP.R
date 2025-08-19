@@ -19,6 +19,10 @@
 #' @seealso \code{\link{fit.BKP}}, \code{\link{fit.DKP}},
 #'   \code{\link{summary.BKP}}, \code{\link{summary.DKP}}.
 #'
+#' @references Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
+#'   Kernel Process Modeling}.  arXiv.
+#'   https://doi.org/10.48550/arXiv.2508.10447.
+#'
 #' @keywords BKP
 #'
 #' @examples
@@ -103,7 +107,12 @@ print.BKP <- function(x, ...) {
   cat(sprintf("Loss function used:          %s\n", loss))
   cat(sprintf("Optimized kernel parameters: %s\n",
               paste(sprintf("%.4f", theta), collapse = ", ")))
-  cat(sprintf("Minimum achieved loss:       %.5f\n", loss_min))
+  if (!is.na(loss_min)) {
+    cat(sprintf("Minimum achieved loss:       %.5f\n", loss_min))
+    cat("Kernel parameters were obtained by optimization.\n")
+  } else {
+    cat("Note: Kernel parameters were user-specified (no optimization).\n")
+  }
   cat("\n")
 
   cat("Prior specification:\n")

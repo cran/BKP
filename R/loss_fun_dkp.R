@@ -12,6 +12,10 @@
 #' @seealso \code{\link{loss_fun}}, \code{\link{fit.DKP}}, \code{\link{get_prior_dkp}},
 #'   \code{\link{kernel_matrix}}
 #'
+#' @references Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
+#'   Kernel Process Modeling}.  arXiv.
+#'   https://doi.org/10.48550/arXiv.2508.10447.
+#'
 #' @examples
 #' set.seed(123)
 #' n = 10
@@ -34,8 +38,6 @@ loss_fun_dkp <- function(
   loss <- match.arg(loss)
   kernel <- match.arg(kernel)
 
-  n <- nrow(Y)
-
   # Convert gamma to kernel hyperparameters (theta = 10^gamma)
   theta <- 10^gamma
 
@@ -49,12 +51,9 @@ loss_fun_dkp <- function(
   # Compute posterior alpha
   alpha_n <- as.matrix(alpha0) + as.matrix(K %*% Y)
 
-  # Numerical stabilization: avoid log(0) or NaNs
-  alpha_n <- pmax(alpha_n, 1e-10)
-
   # Posterior mean prediction of success probability
   pi_hat <- alpha_n / rowSums(alpha_n)
-  pi_hat <- pmin(pmax(pi_hat, 1e-10), 1 - 1e-10)   # avoid log(0)
+  pi_hat <- pmin(pmax(pi_hat, 1e-6), 1 - 1e-6)   # avoid log(0)
 
   if (loss == "brier") {
     # Brier score (Mean Squared Error)
@@ -65,7 +64,7 @@ loss_fun_dkp <- function(
     return(brier)
   } else if (loss == "log_loss"){
     # log-loss (cross-entropy)
-    log_loss <- -mean( Y * log(pi_hat) )
+    log_loss <- -mean(Y * log(pi_hat))
     return(log_loss)
   } else {
     stop("Unsupported loss type. Use 'brier' or 'log_loss'.")
