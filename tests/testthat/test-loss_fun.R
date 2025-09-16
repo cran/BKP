@@ -1,22 +1,56 @@
-test_that("loss_fun computes valid loss values for brier and log_loss", {
+
+# ------------------ BKP (Binary) Example ------------------
+test_that("BKP losses return numeric values", {
   set.seed(123)
-  n = 10
-  Xnorm = matrix(runif(2 * n), ncol = 2)
-  m = rep(10, n)
-  y = rbinom(n, size = m, prob = runif(n))
+  n <- 10
+  d <- 2
+  Xnorm <- matrix(runif(n * d), ncol = d)
+  m <- rep(10, n)
+  y <- rbinom(n, size = m, prob = runif(n))
+  gamma <- rep(0, d)
 
-  gamma <- rep(0, 2)
+  loss_types <- c("brier", "log_loss")
 
-  # Brier score
-  loss1 <- loss_fun(gamma = gamma, Xnorm = Xnorm, y = y, m = m)
+  for (loss_type in loss_types) {
+    l <- loss_fun(
+      gamma = gamma, Xnorm = Xnorm,
+      y = y, m = m,
+      model = "BKP",
+      prior = "noninformative",
+      loss = loss_type,
+      kernel = "gaussian"
+    )
+    expect_true(is.numeric(l))
+    expect_equal(length(l), 1)
+    expect_false(is.na(l))
+    expect_false(is.infinite(l))
+  }
+})
 
-  expect_type(loss1, "double")
-  expect_gte(loss1, 0)
+# ------------------ DKP (Multi-class) Example ------------------
+test_that("DKP losses return numeric values", {
+  set.seed(123)
+  n <- 10
+  q <- 3
+  d <- 2
+  Xnorm <- matrix(runif(n * d), ncol = d)
+  Y <- t(rmultinom(n, size = 10, prob = rep(1/q, q))) # n x q
+  gamma <- rep(0, d)
 
-  # Log-loss
-  loss2 <- loss_fun(gamma = gamma, Xnorm = Xnorm, y = y, m = m,
-                    prior = "adaptive",
-                    loss = "log_loss",
-                    kernel = "matern52")
-  expect_type(loss2, "double")
+  loss_types <- c("brier", "log_loss")
+
+  for (loss_type in loss_types) {
+    l <- loss_fun(
+      gamma = gamma, Xnorm = Xnorm,
+      Y = Y,
+      model = "DKP",
+      prior = "noninformative",
+      loss = loss_type,
+      kernel = "gaussian"
+    )
+    expect_true(is.numeric(l))
+    expect_equal(length(l), 1)
+    expect_false(is.na(l))
+    expect_false(is.infinite(l))
+  }
 })

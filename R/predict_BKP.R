@@ -1,40 +1,65 @@
 #' @name predict
 #'
-#' @title Predict Method for BKP or DKP Models
+#' @title Posterior Prediction for BKP or DKP Models
 #'
-#' @description Generates posterior predictive summaries from a fitted BKP or
-#'   DKP model at new input locations.
+#' @description Generates posterior predictive summaries from a fitted Beta
+#'   Kernel Process (BKP) or Dirichlet Kernel Process (DKP) model at new input
+#'   locations. Supports prediction of posterior mean, variance, credible
+#'   intervals, and classification labels (where applicable).
 #'
 #' @param object An object of class \code{"BKP"} or \code{"DKP"}, typically
-#'   returned by \code{\link{fit.BKP}} or \code{\link{fit.DKP}}.
-#' @param Xnew A numeric matrix (or vector) of new input locations where
-#'   predictions are desired.
-#' @param CI_level Credible level for prediction intervals (default is
-#'   \code{0.95}, corresponding to 95% CI).
-#' @param threshold Classification threshold for binary prediction based on
-#'   posterior mean (used only for BKP; default is \code{0.5}).
+#'   returned by \code{\link{fit_BKP}} or \code{\link{fit_DKP}}.
+#' @param Xnew A numeric vector or matrix of new input locations at which to
+#'   generate predictions. If \code{NULL}, predictions are returned for the
+#'   training data.
+#' @param CI_level Numeric between 0 and 1 specifying the credible level for
+#'   posterior intervals (default \code{0.95} for 95% credible interval).
+#' @param threshold Numeric between 0 and 1 specifying the classification
+#'   threshold for binary predictions based on posterior mean (used only for
+#'   BKP; default is \code{0.5}).
 #' @param ... Additional arguments passed to generic \code{predict} methods
 #'   (currently not used; included for S3 method consistency).
 #'
-#' @return A list with the following components:
+#' @return A list containing posterior predictive summaries:
 #' \describe{
-#'   \item{\code{Xnew}}{The new input locations.}
-#'   \item{\code{mean}}{BKP: Posterior mean of the success probability at each location.
-#'                      DKP: A matrix of posterior mean class probabilities (rows = inputs, columns = classes).}
-#'   \item{\code{variance}}{BKP: Posterior variance of the success probability.
-#'                          DKP: A matrix of posterior variances for each class.}
-#'   \item{\code{lower}}{BKP: Lower bound of the prediction interval (e.g., 2.5th percentile for 95% CI).
-#'                       DKP: A matrix of lower bounds for each class (e.g., 2.5th percentile).}
-#'   \item{\code{upper}}{BKP: Upper bound of the prediction interval (e.g., 97.5th percentile for 95% CI).
-#'                       DKP: A matrix of upper bounds for each class (e.g., 97.5th percentile).}
-#'   \item{\code{class}}{BKP: Predicted binary label (0 or 1), based on posterior mean and threshold, if \code{m = 1}.
-#'                       DKP: Predicted class label (i.e., the class with the highest posterior mean probability).}
+#'   \item{\code{X}}{The original training input locations.}
+#'   \item{\code{Xnew}}{The new input locations for prediction (same as \code{Xnew} if provided).}
+#'   \item{\code{alpha_n}, \code{beta_n}}{Posterior shape parameters for each location:
+#'     \itemize{
+#'       \item BKP: Vectors of posterior shape parameters (\code{alpha_n}, \code{beta_n}) for each input location.
+#'       \item DKP: Posterior shape parameter matrix \code{alpha_n} (rows = input locations, columns = classes).
+#'     }}
+#'   \item{\code{mean}}{Posterior mean prediction:
+#'     \itemize{
+#'       \item BKP: Posterior mean success probability at each location.
+#'       \item DKP: Matrix of posterior mean class probabilities (rows = inputs, columns = classes).
+#'     }}
+#'   \item{\code{variance}}{Posterior predictive variance:
+#'     \itemize{
+#'       \item BKP: Variance of success probability.
+#'       \item DKP: Matrix of predictive variances for each class.
+#'     }}
+#'   \item{\code{lower}}{Lower bound of the posterior credible interval:
+#'     \itemize{
+#'       \item BKP: Lower bound (e.g., 2.5th percentile for 95% CI).
+#'       \item DKP: Matrix of lower bounds for each class.
+#'     }}
+#'   \item{\code{upper}}{Upper bound of the posterior credible interval:
+#'     \itemize{
+#'       \item BKP: Upper bound (e.g., 97.5th percentile for 95% CI).
+#'       \item DKP: Matrix of upper bounds for each class.
+#'     }}
+#'   \item{\code{class}}{Predicted label:
+#'     \itemize{
+#'       \item BKP: Binary class (0 or 1) based on posterior mean and \code{threshold}, only if \code{m = 1}.
+#'       \item DKP: Predicted class label with highest posterior mean probability.
+#'     }}
+#'   \item{\code{CI_level}}{The specified credible interval level.}
 #' }
 #'
-#' @seealso \code{\link{fit.BKP}} for fitting Beta Kernel Process models.
-#'   \code{\link{fit.DKP}} for fitting Dirichlet Kernel Process models.
-#'   \code{\link{plot.BKP}} for visualizing fitted BKP models.
-#'   \code{\link{plot.DKP}} for visualizing fitted DKP models.
+#' @seealso \code{\link{fit_BKP}} and \code{\link{fit_DKP}} for model fitting;
+#'   \code{\link{plot.BKP}} and \code{\link{plot.DKP}} for visualization of
+#'   fitted models.
 #'
 #' @references Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
 #'   Kernel Process Modeling}.  arXiv.
@@ -63,11 +88,14 @@
 #' y <- rbinom(n, size = m, prob = true_pi)
 #'
 #' # Fit BKP model
-#' model1 <- fit.BKP(X, y, m, Xbounds=Xbounds)
+#' model1 <- fit_BKP(X, y, m, Xbounds=Xbounds)
 #'
-#' # Prediction
+#' # Prediction on training data
+#' predict(model1)
+#'
+#' # Prediction on new data
 #' Xnew = matrix(seq(-2, 2, length = 10), ncol=1) #new data points
-#' predict(model1, Xnew)
+#' predict(model1, Xnew = Xnew)
 #'
 #'
 #' #-------------------------- 2D Example ---------------------------
@@ -97,85 +125,106 @@
 #' y <- rbinom(n, size = m, prob = true_pi)
 #'
 #' # Fit BKP model
-#' model2 <- fit.BKP(X, y, m, Xbounds=Xbounds)
+#' model2 <- fit_BKP(X, y, m, Xbounds=Xbounds)
 #'
-#' # Prediction
+#' # Prediction on training data
+#' predict(model2)
+#'
+#' # Prediction on new data
 #' x1 <- seq(Xbounds[1,1], Xbounds[1,2], length.out = 10)
 #' x2 <- seq(Xbounds[2,1], Xbounds[2,2], length.out = 10)
 #' Xnew <- expand.grid(x1 = x1, x2 = x2)
-#' predict(model2, Xnew)
+#' predict(model2, Xnew = Xnew)
 #'
 #' @export
 #' @method predict BKP
 
-predict.BKP <- function(object, Xnew, CI_level = 0.95, threshold = 0.5, ...)
+predict.BKP <- function(object, Xnew = NULL, CI_level = 0.95, threshold = 0.5, ...)
 {
-  if (!inherits(object, "BKP")) {
-    stop("The input is not of class 'BKP'. Please provide a model fitted with 'fit.BKP()'.")
+  #---- Argument checks ----
+  X       <- object$X
+  d       <- ncol(X)
+  if (!is.null(Xnew)) {
+    if (is.null(nrow(Xnew))) {
+      Xnew <- matrix(Xnew, nrow = 1)
+    }
+    Xnew <- as.matrix(Xnew)
+    if (!is.numeric(Xnew)) {
+      stop("'Xnew' must be numeric.")
+    }
+    if (ncol(Xnew) != d) {
+      stop("The number of columns in 'Xnew' must match the original input dimension.")
+    }
+  }
+  if (!is.numeric(CI_level) || length(CI_level) != 1 || CI_level <= 0 || CI_level >= 1) {
+    stop("'CI_level' must be a single numeric value strictly between 0 and 1.")
+  }
+  if (!is.numeric(threshold) || length(threshold) != 1 || threshold <= 0 || threshold >= 1) {
+    stop("'threshold' must be a single numeric value strictly between 0 and 1.")
   }
 
-  BKPmodel <- object
 
-  # Extract components
-  Xnorm   <- BKPmodel$Xnorm
-  y       <- BKPmodel$y
-  m       <- BKPmodel$m
-  theta   <- BKPmodel$theta_opt
-  kernel  <- BKPmodel$kernel
-  prior   <- BKPmodel$prior
-  r0      <- BKPmodel$r0
-  p0      <- BKPmodel$p0
-  Xbounds <- BKPmodel$Xbounds
-  d       <- ncol(Xnorm)
+  if(!is.null(Xnew)){
+    # Extract components
+    Xnorm   <- object$Xnorm
+    y       <- object$y
+    m       <- object$m
+    theta   <- object$theta_opt
+    kernel  <- object$kernel
+    prior   <- object$prior
+    r0      <- object$r0
+    p0      <- object$p0
+    Xbounds <- object$Xbounds
 
-  # Ensure Xnew is a matrix and matches input dimension
-  if (is.null(nrow(Xnew))) {
-    Xnew <- matrix(Xnew, nrow = 1)
+    # Normalize Xnew to [0,1]^d
+    Xnew_norm <- sweep(Xnew, 2, Xbounds[, 1], "-")
+    Xnew_norm <- sweep(Xnew_norm, 2, Xbounds[, 2] - Xbounds[, 1], "/")
+
+    # Compute kernel matrix
+    K <- kernel_matrix(Xnew_norm, Xnorm, theta = theta, kernel = kernel) # m*n matrix
+
+    # get the prior parameters: alpha0(x) and beta0(x)
+    prior_par <- get_prior(prior = prior, model = "BKP",
+                           r0 = r0, p0 = p0, y = y, m = m, K = K)
+    alpha0 <- prior_par$alpha0
+    beta0 <- prior_par$beta0
+
+    # Posterior parameters
+    alpha_n <- alpha0 + as.vector(K %*% y)
+    beta_n  <- beta0 + as.vector(K %*% (m - y))
+  }else{
+    # Use training data
+    alpha_n <- object$alpha_n
+    beta_n  <- object$beta_n
+    m <- object$m
   }
-  Xnew <- as.matrix(Xnew)
-  if (ncol(Xnew) != d) {
-    stop("The number of columns in 'Xnew' must match the original input dimension.")
-  }
-
-  # Normalize Xnew to [0,1]^d
-  Xnew_norm <- sweep(Xnew, 2, Xbounds[, 1], "-")
-  Xnew_norm <- sweep(Xnew_norm, 2, Xbounds[, 2] - Xbounds[, 1], "/")
-
-  # Compute kernel matrix
-  K <- kernel_matrix(Xnew_norm, Xnorm, theta = theta, kernel = kernel) # m*n matrix
-
-  # get the prior parameters: alpha0(x) and beta0(x)
-  prior_par <- get_prior(prior = prior, r0 = r0, p0 = p0, y = y, m = m, K = K)
-  alpha0 <- prior_par$alpha0
-  beta0 <- prior_par$beta0
-
-  # Posterior parameters
-  alpha_n <- pmax(alpha0 + as.vector(K %*% y), 1e-6)
-  beta_n  <- pmax(beta0 + as.vector(K %*% (m - y)), 1e-6)
 
   # Predictive mean and variance
-  pi_mean <- alpha_n / (alpha_n + beta_n)
-  pi_var  <- pi_mean * (1 - pi_mean) / (alpha_n + beta_n + 1)
+  pred_mean <- alpha_n / (alpha_n + beta_n)
+  pred_var  <- pred_mean * (1 - pred_mean) / (alpha_n + beta_n + 1)
 
   # Credible intervals
-  pi_lower <- qbeta((1 - CI_level) / 2, alpha_n, beta_n)
-  pi_upper <- qbeta((1 + CI_level) / 2, alpha_n, beta_n)
+  pred_lower <- qbeta((1 - CI_level) / 2, alpha_n, beta_n)
+  pred_upper <- qbeta((1 + CI_level) / 2, alpha_n, beta_n)
 
-
-  # Output
+  # Output list
   prediction <- list(
+    X        = X,
     Xnew     = Xnew,
-    mean     = pi_mean,
-    variance = pi_var,
-    lower    = pi_lower,
-    upper    = pi_upper,
+    alpha_n  = alpha_n,
+    beta_n   = beta_n,
+    mean     = pred_mean,
+    variance = pred_var,
+    lower    = pred_lower,
+    upper    = pred_upper,
     CI_level  = CI_level)
 
   # Posterior classification label (only for classification data)
   if (all(m == 1)) {
-    prediction$class <- ifelse(pi_mean > threshold, 1, 0)
+    prediction$class <- ifelse(pred_mean > threshold, 1, 0)
     prediction$threshold <- threshold
   }
 
+  class(prediction) <- "predict_BKP"
   return(prediction)
 }

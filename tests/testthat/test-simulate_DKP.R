@@ -15,32 +15,32 @@ test_that("simulate.DKP returns expected structure and dimensions", {
   q <- ncol(Y)  # neumber of class
 
   # 2. Fit DKP model
-  model <- fit.DKP(X, Y, Xbounds = Xbounds)
+  model <- fit_DKP(X, Y, Xbounds = Xbounds)
 
   # 3. New prediction locations
   n_Xnew <- 10
   Xnew <- matrix(seq(-2, 2, length.out = n_Xnew), ncol = 1)
 
   # 4. Simulate from the DKP posterior
-  n_sim <- 5
-  sim_result <- simulate(model, Xnew = Xnew, n_sim = n_sim)
+  nsim <- 5
+  sim_result <- simulate(model, Xnew = Xnew, nsim = nsim)
 
   # 5. Check output structure
   expect_type(sim_result, "list")
-  expect_named(sim_result, c("sims", "mean", "class"))
+  expect_named(sim_result, c('samples', 'mean', 'class', 'X', 'Xnew'))
 
-  # sims: array of dimension [n_sim × q × n_new]
-  expect_true(is.array(sim_result$sims))
-  expect_equal(dim(sim_result$sims), c(n_sim, q, n_Xnew))
+  # sims: array of dimension [nsim × q × n_new]
+  expect_true(is.array(sim_result$samples))
+  expect_equal(dim(sim_result$samples), c(n_Xnew, q, nsim))
 
   # mean: matrix of dimension [n_new × q]
   expect_true(is.matrix(sim_result$mean))
-  expect_in(names(sim_result), c("sims", "mean", "class"))
+  expect_in(names(sim_result), c('samples', 'mean', 'class', 'X', 'Xnew'))
 
   # class: binary matrix
   expect_true(is.matrix(sim_result$class))
   expect_true(all(sim_result$class %in% 1:q))
 
   # Each column of class corresponds to a simulation
-  expect_equal(dim(sim_result$class), c(n_Xnew, n_sim))
+  expect_equal(dim(sim_result$class), c(n_Xnew, nsim))
 })

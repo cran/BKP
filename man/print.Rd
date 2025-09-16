@@ -3,30 +3,55 @@
 \name{print}
 \alias{print}
 \alias{print.BKP}
+\alias{print.summary_BKP}
+\alias{print.predict_BKP}
+\alias{print.simulate_BKP}
 \alias{print.DKP}
-\title{Print Summary of a Fitted BKP or DKP Model}
+\alias{print.summary_DKP}
+\alias{print.predict_DKP}
+\alias{print.simulate_DKP}
+\title{Print Methods for BKP and DKP Objects}
 \usage{
 \method{print}{BKP}(x, ...)
 
+\method{print}{summary_BKP}(x, ...)
+
+\method{print}{predict_BKP}(x, ...)
+
+\method{print}{simulate_BKP}(x, ...)
+
 \method{print}{DKP}(x, ...)
+
+\method{print}{summary_DKP}(x, ...)
+
+\method{print}{predict_DKP}(x, ...)
+
+\method{print}{simulate_DKP}(x, ...)
 }
 \arguments{
-\item{x}{An object of class \code{"BKP"} (from \code{\link{fit.BKP}}) or
-\code{"DKP"} (from \code{\link{fit.DKP}}).}
+\item{x}{An object of class \code{"BKP"} or \code{"DKP"}, or a derived object
+such as \code{summary}, \code{predict}, or \code{simulate}.}
 
 \item{...}{Additional arguments passed to the generic \code{print} method
-(currently not used).}
+(currently unused; included for S3 consistency).}
 }
 \value{
-Invisibly returns the input object (of class \code{"BKP"} or
-\code{"DKP"}). The function is called for its side effect of printing a
-summary to the console.
+Invisibly returns the input object. Called for the side effect of
+printing human-readable summaries to the console.
 }
 \description{
-Displays a concise summary of a fitted BKP or DKP model. The
-output includes key characteristics such as sample size, input
-dimensionality, kernel type, loss function, optimized kernel
-hyperparameters, and minimum loss.
+Provides formatted console output for fitted BKP/DKP model
+objects, their summaries, predictions, and simulations. The following
+specialized methods are supported:
+\itemize{
+\item \code{print.BKP}, \code{print.DKP} – display fitted model objects.
+\item \code{print.summary_BKP}, \code{print.summary_DKP} – display
+model summaries.
+\item \code{print.predict_BKP}, \code{print.predict_DKP} – display
+posterior predictive results.
+\item \code{print.simulate_BKP}, \code{print.simulate_DKP} – display
+posterior simulations.
+}
 }
 \examples{
 # ============================================================== #
@@ -49,9 +74,11 @@ m <- sample(100, n, replace = TRUE)
 y <- rbinom(n, size = m, prob = true_pi)
 
 # Fit BKP model
-model1 <- fit.BKP(X, y, m, Xbounds=Xbounds)
-print(model1)
-
+model1 <- fit_BKP(X, y, m, Xbounds=Xbounds)
+print(model1)                    # fitted object
+print(summary(model1))           # summary
+print(predict(model1))           # predictions
+print(simulate(model1, nsim=3))  # posterior simulations
 
 #-------------------------- 2D Example ---------------------------
 set.seed(123)
@@ -80,8 +107,11 @@ m <- sample(100, n, replace = TRUE)
 y <- rbinom(n, size = m, prob = true_pi)
 
 # Fit BKP model
-model2 <- fit.BKP(X, y, m, Xbounds=Xbounds)
-print(model2)
+model2 <- fit_BKP(X, y, m, Xbounds=Xbounds)
+print(model2)                    # fitted object
+print(summary(model2))           # summary
+print(predict(model2))           # predictions
+print(simulate(model2, nsim=3))  # posterior simulations
 
 # ============================================================== #
 # ========================= DKP Examples ======================= #
@@ -92,22 +122,26 @@ set.seed(123)
 
 # Define true class probability function (3-class)
 true_pi_fun <- function(X) {
-  p <- (1 + exp(-X^2) * cos(10 * (1 - exp(-X)) / (1 + exp(-X)))) / 2
-  return(matrix(c(p/2, p/2, 1 - p), nrow = length(p)))
+  p1 <- 1/(1+exp(-3*X))
+  p2 <- (1 + exp(-X^2) * cos(10 * (1 - exp(-X)) / (1 + exp(-X)))) / 2
+  return(matrix(c(p1/2, p2/2, 1 - (p1+p2)/2), nrow = length(p1)))
 }
 
 n <- 30
 Xbounds <- matrix(c(-2, 2), nrow = 1)
 X <- tgp::lhs(n = n, rect = Xbounds)
 true_pi <- true_pi_fun(X)
-m <- sample(100, n, replace = TRUE)
+m <- sample(150, n, replace = TRUE)
 
 # Generate multinomial responses
 Y <- t(sapply(1:n, function(i) rmultinom(1, size = m[i], prob = true_pi[i, ])))
 
 # Fit DKP model
-model1 <- fit.DKP(X, Y, Xbounds = Xbounds)
-print(model1)
+model1 <- fit_DKP(X, Y, Xbounds = Xbounds)
+print(model1)                    # fitted object
+print(summary(model1))           # summary
+print(predict(model1))           # predictions
+print(simulate(model1, nsim=3))  # posterior simulations
 
 
 #-------------------------- 2D Example ---------------------------
@@ -123,23 +157,27 @@ true_pi_fun <- function(X) {
     (19 - 14*x1 + 3*x1^2 - 14*x2 + 6*x1*x2 + 3*x2^2)
   b <- 30 + (2*x1 - 3*x2)^2 *
     (18 - 32*x1 + 12*x1^2 + 48*x2 - 36*x1*x2 + 27*x2^2)
-  f <- (log(a * b) - m) / s
-  p <- pnorm(f)
-  return(matrix(c(p/2, p/2, 1 - p), nrow = length(p)))
+  f <- (log(a*b)- m)/s
+  p1 <- pnorm(f) # Transform to probability
+  p2 <- sin(pi * X[,1]) * sin(pi * X[,2])
+  return(matrix(c(p1/2, p2/2, 1 - (p1+p2)/2), nrow = length(p1)))
 }
 
 n <- 100
 Xbounds <- matrix(c(0, 0, 1, 1), nrow = 2)
 X <- tgp::lhs(n = n, rect = Xbounds)
 true_pi <- true_pi_fun(X)
-m <- sample(100, n, replace = TRUE)
+m <- sample(150, n, replace = TRUE)
 
 # Generate multinomial responses
 Y <- t(sapply(1:n, function(i) rmultinom(1, size = m[i], prob = true_pi[i, ])))
 
 # Fit DKP model
-model2 <- fit.DKP(X, Y, Xbounds = Xbounds)
-print(model2)
+model2 <- fit_DKP(X, Y, Xbounds = Xbounds)
+print(model2)                    # fitted object
+print(summary(model2))           # summary
+print(predict(model2))           # predictions
+print(simulate(model2, nsim=3))  # posterior simulations
 
 }
 \references{
@@ -148,8 +186,11 @@ Kernel Process Modeling}.  arXiv.
 https://doi.org/10.48550/arXiv.2508.10447.
 }
 \seealso{
-\code{\link{fit.BKP}}, \code{\link{fit.DKP}},
-\code{\link{summary.BKP}}, \code{\link{summary.DKP}}.
+\code{\link{fit_BKP}}, \code{\link{fit_DKP}} for model fitting;
+\code{\link{summary.BKP}}, \code{\link{summary.DKP}} for model summaries;
+\code{\link{predict.BKP}}, \code{\link{predict.DKP}} for posterior
+prediction; \code{\link{simulate.BKP}}, \code{\link{simulate.DKP}} for
+posterior simulations.
 }
 \keyword{BKP}
 \keyword{DKP}
