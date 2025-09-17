@@ -1,6 +1,6 @@
-51cf2ce88ae360f4039c2e49300ef9ce *DESCRIPTION
+79054e5e5fcd34f8f7410ec8f77e27eb *DESCRIPTION
 5f10f656010031001e152d7dd0be9758 *NAMESPACE
-de15e8acc7901a1e2fb5995e443f2486 *NEWS.md
+89f4bc494238a276b26e280bf36b8f8a *NEWS.md
 e72a472ae76dfd941e8d709e0247b836 *R/BKP-package.R
 dec67b9d637e710d3a3a96e89515a491 *R/fit_BKP.R
 838eba56cabd13482386632c002ae9ec *R/fit_DKP.R
@@ -24,12 +24,13 @@ b99a8041d210bbdf0879940a382c9e04 *R/simulate_DKP.R
 cfab236fe432b665cf78d3d3e7e5b9d5 *R/summary_BKP.R
 a8bade34f5502d9857a9d4e1efad3cf8 *R/summary_DKP.R
 09106d8c814f0907fdded891e491e34e *R/utils.R
-25682bb654e04b52b990b57b036a1af1 *README.md
+6987eb51b752ecd1923577e654a0f1be *R/zzz.R
+12d97c85f2bb788d38660952528e4687 *README.md
 e147e0a219e3638d1a017e571a79e847 *build/vignette.rds
-faceb5d22f6d93da0f43bff1b683e323 *inst/CITATION
-639170bb954bc0c7adc8dd6996ef8175 *inst/doc/vignettes.R
-63719f5986af054fd06b283c335f2db6 *inst/doc/vignettes.Rmd
-cb54b8e21aceeb7967c949439b931164 *inst/doc/vignettes.pdf
+1fe107c498c35cf0d4e996610a7281ee *inst/CITATION
+f549fdce9b98a77c00b576db6d111b3f *inst/doc/vignettes.R
+4c69c3718a57245bbe5f15a80be150a0 *inst/doc/vignettes.Rmd
+46043b079a2c2f5aa2cb96c9e9287ff3 *inst/doc/vignettes.pdf
 7b155bc5a9679ece2fa5bde4bb537180 *man/BKP-package.Rd
 b0f14b92a2432ad61f93f56c3ec1bb03 *man/figures/logo.png
 48794880cef05a7a714924b370952926 *man/fit_BKP.Rd
@@ -71,4 +72,4 @@ b67f59668540073d994f9974dc3b0406 *tests/testthat/test-simulate_DKP.R
 81cf8add1552ac2204c0cd6d9d1e0fe7 *tests/testthat/test-summary_DKP.R
 a13b541953b1607ab9fda035dd9d0a4a *tests/testthat/test-utils.R
 f451833c86bce06c8c52ad64980ce082 *vignettes/refs.bib
-63719f5986af054fd06b283c335f2db6 *vignettes/vignettes.Rmd
+4c69c3718a57245bbe5f15a80be150a0 *vignettes/vignettes.Rmd
