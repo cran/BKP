@@ -14,6 +14,12 @@ library(sf)
 options(prompt = "R> ", continue = "+  ", width = 70,
         useFancyQuotes = FALSE)
 
+## --- CRAN Linux fix: limit threads to avoid OMP warnings ---
+Sys.setenv(OMP_NUM_THREADS = "1")
+Sys.setenv(OPENBLAS_NUM_THREADS = "1")
+Sys.setenv(MKL_NUM_THREADS = "1")
+Sys.setenv(R_PARALLEL_NUM_THREADS = "1")
+
 ## ----Examples using BKP, include=FALSE------------------------------
 # ============================================================== #
 # ========================= BKP Examples ======================= #
