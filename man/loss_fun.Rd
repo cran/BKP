@@ -2,7 +2,7 @@
 % Please edit documentation in R/loss_fun.R
 \name{loss_fun}
 \alias{loss_fun}
-\title{Loss Function for BKP and DKP Models}
+\title{Leave-One-Out Loss for BKP and DKP Models}
 \usage{
 loss_fun(
   gamma,
@@ -15,7 +15,9 @@ loss_fun(
   r0 = 2,
   p0 = NULL,
   loss = c("brier", "log_loss"),
-  kernel = c("gaussian", "matern52", "matern32")
+  kernel = c("gaussian", "matern52", "matern32", "wendland"),
+  isotropic = TRUE,
+  ess = c("none", "shepard")
 )
 }
 \arguments{
@@ -23,10 +25,11 @@ loss_fun(
 
 \item{Xnorm}{A numeric matrix of normalized input features (\code{[0,1]^d}).}
 
-\item{y}{A numeric vector of observed successes (length \code{n}).}
+\item{y}{A numeric vector of observed success counts of length \code{n}.}
 
-\item{m}{A numeric vector of total binomial trials (length \code{n}),
-corresponding to each \code{y}.}
+\item{m}{A numeric vector of total binomial trial counts of length \code{n}.
+Each element of \code{y} must be between 0 and the corresponding element of
+\code{m}.}
 
 \item{Y}{A numeric matrix of observed class counts (\code{n × q}), required
 only when \code{model = "DKP"}, where \code{n} is the number of
@@ -35,55 +38,89 @@ observations and \code{q} the number of classes.}
 \item{model}{A character string specifying the model type: \code{"BKP"}
 (binary outcome) or \code{"DKP"} (multi-class outcome).}
 
-\item{prior}{Type of prior: \code{"noninformative"} (default),
-\code{"fixed"}, or \code{"adaptive"}.}
+\item{prior}{Type of prior specification. Options are
+\code{"noninformative"} (default), \code{"fixed"}, and
+\code{"adaptive"}.}
 
-\item{r0}{Global prior precision (used when \code{prior = "fixed"} or
-\code{"adaptive"}).}
+\item{r0}{Positive scalar prior precision used when \code{prior = "fixed"} or
+\code{prior = "adaptive"}. Default is \code{2}.}
 
 \item{p0}{For BKP, a scalar in \code{(0,1)} specifying the prior mean of
 success probability when \code{prior = "fixed"}. For DKP, a numeric vector
 of length equal to the number of classes specifying the global prior mean,
 which must sum to 1.}
 
-\item{loss}{Loss function for kernel hyperparameter tuning: \code{"brier"}
-(default) or \code{"log_loss"}.}
+\item{loss}{Leave-one-out loss used for kernel hyperparameter tuning. Options
+are \code{"brier"} (default) and \code{"log_loss"}.}
 
-\item{kernel}{Kernel function for local weighting: \code{"gaussian"}
-(default), \code{"matern52"}, or \code{"matern32"}.}
+\item{kernel}{Kernel function used for local weighting. Options are
+\code{"gaussian"} (default), \code{"matern52"}, \code{"matern32"}, and
+\code{"wendland"}.}
+
+\item{isotropic}{Logical. If \code{TRUE} (default), use a single shared
+lengthscale across input dimensions. If \code{FALSE}, use separate
+per-dimension lengthscales.}
+
+\item{ess}{Effective-sample-size calibration for leave-one-out data
+contributions. Use \code{"none"} (default) for the standard LOOCV loss.
+Use \code{"shepard"} to apply the same data-precision rescaling as in
+model fitting, with the Shepard target computed in leave-one-out form.}
 }
 \value{
-A single numeric value representing the total loss (to be minimized).
-The value corresponds to either the Brier score (squared error) or the
-log-loss (cross-entropy).
+A single numeric value giving the average leave-one-out loss to be
+minimized. For BKP, the Brier score and log-loss are averaged over
+observations. For DKP, class-wise losses are summed within each observation
+and then averaged over observations.
 }
 \description{
-Computes the loss for fitting BKP (binary) or DKP (multi-class)
-models. Supports Brier score (mean squared error) and log-loss
-(cross-entropy) under different prior specifications.
+Computes the leave-one-out cross-validation loss used for
+kernel hyperparameter tuning in BKP and DKP models. The input
+\code{gamma} represents log10-transformed kernel lengthscale parameters,
+with \code{theta = 10^gamma}. The function supports Brier score and
+log-loss under noninformative, fixed, and adaptive prior specifications.
+}
+\details{
+The kernel lengthscale parameter is represented on the log10 scale:
+\code{theta = 10^gamma}. The function first computes the kernel matrix
+using \code{\link{kernel_matrix}} and then sets its diagonal entries to
+zero, so that each fitted value is computed with the corresponding
+observation excluded. This implements leave-one-out cross-validation
+without repeatedly refitting the model.
+
+For \code{model = "BKP"}, the loss compares the leave-one-out posterior
+mean success probability with the empirical proportion \code{y / m}. For
+\code{model = "DKP"}, the loss compares the leave-one-out posterior mean
+class-probability vector with the empirical class-proportion vector
+\code{Y / rowSums(Y)}.
+
+If \code{ess = "shepard"}, the same data-precision rescaling used in model
+fitting is applied in leave-one-out form. This option requires unique
+training input locations on the normalized input scale.
 }
 \examples{
 # -------------------------- BKP ---------------------------
 set.seed(123)
+
 n <- 10
 Xnorm <- matrix(runif(2 * n), ncol = 2)
 m <- rep(10, n)
-y <- rbinom(n, size = m, prob = runif(n))
-loss_fun(gamma = rep(0, 2), Xnorm = Xnorm, y = y, m = m, model = "BKP")
+pi_true <- runif(n)
+y <- rbinom(n, size = m, prob = pi_true)
+loss_bkp <- loss_fun(gamma = log10(0.2), Xnorm = Xnorm, y = y, m = m)
 
 # -------------------------- DKP ---------------------------
-set.seed(123)
 n <- 10
 q <- 3
 Xnorm <- matrix(runif(2 * n), ncol = 2)
+m <- rep(10, n)
+p0 <- rep(1 / q, q)
 Y <- matrix(rmultinom(n, size = 10, prob = rep(1/q, q)), nrow = n, byrow = TRUE)
-loss_fun(gamma = rep(0, 2), Xnorm = Xnorm, Y = Y, model = "DKP")
+loss_dkp <- loss_fun(gamma = log10(0.2), Xnorm = Xnorm, Y = Y, model = "DKP")
 
 }
 \references{
 Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
-Kernel Process Modeling}.  arXiv.
-https://doi.org/10.48550/arXiv.2508.10447.
+Kernel Process Modeling}.  arXiv. \url{doi:10.48550/arXiv.2508.10447}.
 }
 \seealso{
 \code{\link{fit_BKP}} for fitting BKP models, \code{\link{fit_DKP}}

@@ -3,9 +3,7 @@
 #' @keywords DKP
 #'
 #' @examples
-#' # -------------------------- DKP ---------------------------
-#' #' set.seed(123)
-#'
+#' # -------------------------- DKP and TwinDKP ---------------------------
 #' # Define true class probability function (3-class)
 #' true_pi_fun <- function(X) {
 #'   p1 <- 1/(1+exp(-3*X))
@@ -23,10 +21,32 @@
 #' Y <- t(sapply(1:n, function(i) rmultinom(1, size = m[i], prob = true_pi[i, ])))
 #'
 #' # Fit DKP model
-#' model <- fit_DKP(X, Y, Xbounds = Xbounds)
+#' # A fixed theta is used here only to keep the example fast and reproducible.
+#' # In practice, omit theta to select it by leave-one-out cross-validation.
+#' model <- fit_DKP(X, Y, Xbounds = Xbounds, theta = 0.04)
 #'
-#' # Extract posterior quantiles
+#' # Extract model parameters
 #' parameter(model)
+#'
+#' \dontrun{
+#' # Larger TwinDKP example
+#' n <- 1000
+#' X <- tgp::lhs(n = n, rect = Xbounds)
+#' true_pi <- true_pi_fun(X)
+#' m <- sample(150, n, replace = TRUE)
+#'
+#' # Generate multinomial responses
+#' Y <- t(sapply(1:n, function(i) rmultinom(1, size = m[i], prob = true_pi[i, ])))
+#'
+#' # Fit TwinDKP model using the default global lengthscale tuning
+#' model <- fit_TwinDKP(
+#'      X, Y,
+#'      Xbounds = Xbounds
+#'    )
+#'
+#' # Extract posterior and kernel parameters
+#' parameter(model)
+#' }
 #'
 #' @export
 #' @method parameter DKP

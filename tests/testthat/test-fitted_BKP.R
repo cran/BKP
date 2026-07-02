@@ -20,7 +20,7 @@ test_that("fit_BKP runs correctly with examples from the documentation", {
   y <- rbinom(n, size = m, prob = true_pi)
 
   # Fit BKP model
-  expect_no_error({model1 <- fit_BKP(X, y, m, Xbounds = Xbounds)})
+  expect_no_error({model1 <- fit_BKP(X, y, m, Xbounds = Xbounds, theta = 0.3)})
   expect_s3_class(model1, "BKP")
   expect_equal(dim(model1$Xnorm), dim(X))
 
@@ -51,7 +51,7 @@ test_that("fit_BKP runs correctly with examples from the documentation", {
   y <- rbinom(n, size = m, prob = true_pi)
 
   # Fit BKP model
-  expect_no_error({model2 <- fit_BKP(X, y, m, Xbounds = Xbounds)})
+  expect_no_error({model2 <- fit_BKP(X, y, m, Xbounds = Xbounds, theta = 0.3)})
   expect_s3_class(model2, "BKP")
   expect_equal(dim(model2$Xnorm), dim(X))
 })
@@ -92,7 +92,8 @@ test_that("fit_BKP handles input validation correctly", {
   # Test for NA values
   X_na <- X_test
   X_na[1, 1] <- NA
-  expect_error(fit_BKP(X = X_na, y = y_test, m = m_test), "Missing values are not allowed in 'X', 'y', or 'm'.")
+  expect_error(fit_BKP(X = X_na, y = y_test, m = m_test),
+               "Missing values are not allowed in 'X', 'y', or 'm'.")
 
   # Test Xbounds validation
   expect_error(fit_BKP(X = X_test, y = y_test, m = m_test, Xbounds = 1), "'Xbounds' must be a numeric matrix.")
@@ -106,12 +107,16 @@ test_that("fit_BKP returns a BKP object with correct structure and content", {
   m_test <- rep(100, n)
   y_test <- rbinom(n, size = m_test, prob = 0.5)
 
-  model <- fit_BKP(X = X_test, y = y_test, m = m_test)
+  model <- fit_BKP(X = X_test, y = y_test, m = m_test, theta = 0.3)
 
   # Check class and structure
   expect_s3_class(model, "BKP")
   expect_true(is.list(model))
-  expect_equal(names(model), c("theta_opt", "kernel", "loss", "loss_min", "X", "Xnorm", "Xbounds", "y", "m", "prior", "r0", "p0", "alpha0", "beta0", "alpha_n", "beta_n"))
+  expect_equal(names(model), c(
+    "theta_opt", "kernel", "isotropic", "loss", "loss_min",
+    "X", "Xnorm", "Xbounds", "y", "m", "prior", "r0", "p0", "alpha0", "beta0",
+    "alpha_n", "beta_n", "ess", "ess_info"
+  ))
 
   # Check content
   expect_equal(model$loss, "brier")
@@ -130,7 +135,53 @@ test_that("fit_BKP uses user-provided theta and skips optimization", {
   m_test <- rep(100, n)
   y_test <- rbinom(n, size = m_test, prob = 0.5)
 
-  model <- fit_BKP(X = X_test, y = y_test, m = m_test, theta = user_theta)
+  model <- fit_BKP(X = X_test, y = y_test, m = m_test, theta = user_theta, isotropic = FALSE)
 
   expect_equal(model$theta_opt, user_theta)
+})
+
+test_that("fit_BKP optimizes theta with Shepard ESS calibration", {
+  set.seed(204)
+  X_test <- matrix(runif(18), ncol = 2)
+  m_test <- sample(6:12, nrow(X_test), replace = TRUE)
+  y_test <- rbinom(nrow(X_test), size = m_test, prob = 0.45)
+
+  expect_no_error({
+    model <- fit_BKP(
+      X = X_test,
+      y = y_test,
+      m = m_test,
+      ess = "shepard",
+      theta = NULL,
+      n_multi_start = 1,
+      n_threads = 1
+    )
+  })
+
+  expect_s3_class(model, "BKP")
+  expect_equal(model$ess, "shepard")
+  expect_true(is.numeric(model$theta_opt))
+  expect_true(is.finite(model$loss_min))
+})
+
+
+test_that("fit_BKP uses fixed theta with Shepard ESS calibration", {
+  set.seed(205)
+  X_test <- matrix(runif(20), ncol = 2)
+  m_test <- sample(6:12, nrow(X_test), replace = TRUE)
+  y_test <- rbinom(nrow(X_test), size = m_test, prob = 0.55)
+  fixed_theta <- 0.3
+
+  model <- fit_BKP(
+    X = X_test,
+    y = y_test,
+    m = m_test,
+    ess = "shepard",
+    theta = fixed_theta
+  )
+
+  expect_s3_class(model, "BKP")
+  expect_equal(model$ess, "shepard")
+  expect_equal(model$theta_opt, fixed_theta)
+  expect_true(is.finite(model$loss_min))
 })

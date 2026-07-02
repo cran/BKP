@@ -7,7 +7,7 @@ test_that("BKP losses return numeric values", {
   Xnorm <- matrix(runif(n * d), ncol = d)
   m <- rep(10, n)
   y <- rbinom(n, size = m, prob = runif(n))
-  gamma <- rep(0, d)
+  gamma <- 0
 
   loss_types <- c("brier", "log_loss")
 
@@ -35,7 +35,7 @@ test_that("DKP losses return numeric values", {
   d <- 2
   Xnorm <- matrix(runif(n * d), ncol = d)
   Y <- t(rmultinom(n, size = 10, prob = rep(1/q, q))) # n x q
-  gamma <- rep(0, d)
+  gamma <- 0
 
   loss_types <- c("brier", "log_loss")
 
@@ -53,4 +53,130 @@ test_that("DKP losses return numeric values", {
     expect_false(is.na(l))
     expect_false(is.infinite(l))
   }
+})
+
+
+test_that("loss_fun supports isotropic lengthscale", {
+  set.seed(123)
+  n <- 10
+  d <- 2
+  Xnorm <- matrix(runif(n * d), ncol = d)
+  y <- rbinom(n, size = 10, prob = 0.5)
+  m <- rep(10, n)
+
+  l <- loss_fun(
+    gamma = 0,
+    Xnorm = Xnorm,
+    y = y,
+    m = m,
+    model = "BKP",
+    prior = "noninformative",
+    loss = "brier",
+    kernel = "gaussian",
+    isotropic = TRUE
+  )
+
+  expect_true(is.numeric(l))
+  expect_length(l, 1)
+})
+
+test_that("loss_fun additional validation and DKP anisotropic branch", {
+  set.seed(1)
+  Xnorm <- matrix(runif(8), ncol = 2)
+  y <- c(1, 0, 1, 0)
+  m <- rep(1, 4)
+  Y <- cbind(y, 1 - y)
+
+  expect_error(loss_fun(gamma = "a", Xnorm = Xnorm, y = y, m = m, model = "BKP"), "'gamma' must be a finite numeric vector.")
+  expect_error(loss_fun(gamma = 0, Xnorm = c(1, 2), y = y, m = m, model = "BKP"), "'Xnorm' must be a numeric matrix with finite values and no NA values.")
+  Xnorm_bad <- Xnorm
+  Xnorm_bad[1, 1] <- NA
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm_bad, y = y, m = m, model = "BKP"), "'Xnorm' must be a numeric matrix with finite values and no NA values.")
+
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, y = y, m = m, model = "BKP", r0 = 0), "'r0' must be a positive finite scalar.")
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, y = y, m = m, model = "BKP", p0 = -1), "'p0' must contain nonnegative finite numeric values.")
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, y = y, m = m, model = "BKP", isotropic = c(TRUE, FALSE)), "'isotropic' must be a single logical value.")
+
+  l_dkp <- loss_fun(gamma = c(-1, -1), Xnorm = Xnorm, Y = Y, model = "DKP", kernel = "matern52", isotropic = FALSE)
+  expect_true(is.numeric(l_dkp) && length(l_dkp) == 1)
+})
+
+test_that("test-loss_fun uncovered DKP/BKP validation branches", {
+  set.seed(11)
+  Xnorm <- matrix(runif(12), ncol = 3)
+  y <- rbinom(nrow(Xnorm), 1, 0.5)
+  m <- rep(1, nrow(Xnorm))
+  Y <- cbind(y, 1 - y)
+
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, m = m, model = "BKP"), "'y' and 'm' must be provided for BKP model.")
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, y = letters[1:nrow(Xnorm)], m = m, model = "BKP"), "'y' and 'm' must be numeric vectors.")
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, y = y, m = c(m, m), model = "BKP"), "'y' and 'm' must have the same length as the number of rows in 'Xnorm'.")
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, y = y + 2, m = m, model = "BKP"), "'y' must be in \\[0, m\\] and 'm' must be positive.")
+
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, model = "DKP"), "'Y' must be provided for DKP model.")
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, Y = matrix(-1, nrow(Xnorm), 2), model = "DKP"), "'Y' must contain nonnegative counts or frequencies.")
+  expect_error(loss_fun(gamma = 0, Xnorm = Xnorm, Y = Y[-1, , drop = FALSE], model = "DKP"), "Number of rows in 'Y' must match the number of rows in 'Xnorm'.")
+
+  l_dkp_log <- loss_fun(gamma = c(-1, -1, -1), Xnorm = Xnorm, Y = Y, model = "DKP", loss = "log_loss", kernel = "matern32", isotropic = FALSE)
+  expect_true(is.numeric(l_dkp_log) && length(l_dkp_log) == 1)
+})
+
+test_that("BKP loss_fun ess = none preserves default loss", {
+  set.seed(202)
+  Xnorm <- matrix(runif(18), ncol = 2)
+  y <- c(1, 3, 2, 5, 4, 0, 6, 2, 3)
+  m <- c(8, 9, 7, 10, 11, 6, 12, 8, 9)
+
+  for (loss_type in c("brier", "log_loss")) {
+    default_loss <- loss_fun(
+      gamma = -0.25,
+      Xnorm = Xnorm,
+      y = y,
+      m = m,
+      model = "BKP",
+      prior = "noninformative",
+      loss = loss_type,
+      kernel = "gaussian",
+      isotropic = TRUE
+    )
+    none_loss <- loss_fun(
+      gamma = -0.25,
+      Xnorm = Xnorm,
+      y = y,
+      m = m,
+      model = "BKP",
+      prior = "noninformative",
+      loss = loss_type,
+      kernel = "gaussian",
+      isotropic = TRUE,
+      ess = "none"
+    )
+
+    expect_equal(none_loss, default_loss)
+  }
+})
+
+
+test_that("BKP loss_fun supports Shepard ESS leave-one-out calibration", {
+  set.seed(203)
+  Xnorm <- matrix(runif(16), ncol = 2)
+  y <- c(1, 3, 2, 5, 4, 0, 6, 2)
+  m <- c(8, 9, 7, 10, 11, 6, 12, 8)
+
+  shepard_loss <- loss_fun(
+    gamma = -0.1,
+    Xnorm = Xnorm,
+    y = y,
+    m = m,
+    model = "BKP",
+    prior = "noninformative",
+    loss = "brier",
+    kernel = "gaussian",
+    ess = "shepard"
+  )
+
+  expect_true(is.numeric(shepard_loss))
+  expect_length(shepard_loss, 1)
+  expect_false(is.na(shepard_loss))
+  expect_false(is.infinite(shepard_loss))
 })

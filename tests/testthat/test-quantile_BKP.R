@@ -22,7 +22,7 @@ test_that("quantile.BKP returns correct posterior quantiles", {
   y <- rbinom(n, size = m, prob = true_pi)
 
   # Fit BKP model (this will be the object to test)
-  model <- fit_BKP(X, y, m, Xbounds = Xbounds)
+  model <- fit_BKP(X, y, m, Xbounds = Xbounds, theta = 0.3)
 
   # -------------------------------------------------------------------------
   # Test Cases: Verify quantile function
@@ -71,9 +71,9 @@ test_that("quantile.BKP handles input validation correctly", {
 
   # Test for invalid probs values
   expect_error(quantile(mock_model, probs = c(0.5, 1.1)),
-               "'probs' must be a numeric vector with all values in \\[0, 1\\].")
+               "'probs' must be a nonempty finite numeric vector with all values in \\[0, 1\\].")
   expect_error(quantile(mock_model, probs = -0.1),
-               "'probs' must be a numeric vector with all values in \\[0, 1\\].")
+               "'probs' must be a nonempty finite numeric vector with all values in \\[0, 1\\].")
   expect_error(quantile(mock_model, probs = "a"),
-               "'probs' must be a numeric vector with all values in \\[0, 1\\].")
+               "'probs' must be a nonempty finite numeric vector with all values in \\[0, 1\\].")
 })

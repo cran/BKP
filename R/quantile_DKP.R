@@ -2,9 +2,7 @@
 #' @keywords DKP
 #'
 #' @examples
-#' # -------------------------- DKP ---------------------------
-#' #' set.seed(123)
-#'
+#' # -------------------------- DKP and TwinDKP ---------------------------
 #' # Define true class probability function (3-class)
 #' true_pi_fun <- function(X) {
 #'   p1 <- 1/(1+exp(-3*X))
@@ -22,18 +20,42 @@
 #' Y <- t(sapply(1:n, function(i) rmultinom(1, size = m[i], prob = true_pi[i, ])))
 #'
 #' # Fit DKP model
-#' model <- fit_DKP(X, Y, Xbounds = Xbounds)
+#' # A fixed theta is used here only to keep the example fast and reproducible.
+#' # In practice, omit theta to select it by leave-one-out cross-validation.
+#' model <- fit_DKP(X, Y, Xbounds = Xbounds, theta = 0.04)
 #'
 #' # Extract posterior quantiles
 #' quantile(model)
+#'
+#' \dontrun{
+#' # Larger TwinDKP example
+#' n <- 1000
+#' X <- tgp::lhs(n = n, rect = Xbounds)
+#' true_pi <- true_pi_fun(X)
+#' m <- sample(100, n, replace = TRUE)
+#'
+#' # Generate multinomial responses
+#' Y <- t(sapply(1:n, function(i) rmultinom(1, size = m[i], prob = true_pi[i, ])))
+#'
+#' # Fit TwinDKP model using the default global lengthscale tuning
+#' model <- fit_TwinDKP(
+#'      X, Y,
+#'      Xbounds = Xbounds
+#'    )
+#'
+#' # Extract posterior quantiles
+#' quantile(model)
+#' }
 #'
 #' @export
 #' @method quantile DKP
 
 quantile.DKP <- function(x, probs = c(0.025, 0.5, 0.975), ...) {
   # arguments checking
-  if (!is.numeric(probs) || any(probs < 0 | probs > 1)) {
-    stop("'probs' must be a numeric vector with all values in [0, 1].")
+  if (!is.numeric(probs) || length(probs) < 1L ||
+      anyNA(probs) || any(!is.finite(probs)) ||
+      any(probs < 0 | probs > 1)) {
+    stop("'probs' must be a nonempty finite numeric vector with all values in [0, 1].")
   }
 
   # Extract posterior Dirichlet parameters
@@ -42,31 +64,29 @@ quantile.DKP <- function(x, probs = c(0.025, 0.5, 0.975), ...) {
   q <- ncol(alpha_n)
   row_sum <- rowSums(alpha_n)
 
-  if (length(probs) > 1) {
-    # Create 3D array: obs x class x probs
-    post_q_array <- array(NA, dim = c(n, q, length(probs)),
-                          dimnames = list(NULL,
-                                          paste0("class", 1:q),
-                                          paste0(probs*100, "%")))
+  beta_n <- row_sum - alpha_n
 
-    # Loop over classes to compute Beta approximation quantiles
-    for (j in 1:q) {
-      post_q_array[, j, ] <- t(mapply(function(alpha_ij, row_sum_i) {
-        qbeta(probs, alpha_ij, row_sum_i - alpha_ij)
-      }, alpha_n[, j], row_sum))
-    }
+  if (length(probs) > 1) {
+    # Vectorized Beta approximation quantiles, reshaped to obs x class x probs.
+    post_q_array <- array(
+      qbeta(
+        rep(probs, each = n * q),
+        rep(as.vector(alpha_n), times = length(probs)),
+        rep(as.vector(beta_n), times = length(probs))
+      ),
+      dim = c(n, q, length(probs)),
+      dimnames = list(NULL, paste0("class", 1:q), paste0(probs * 100, "%"))
+    )
 
     return(post_q_array)
   } else {
     # Single probability: return matrix obs x class
-    post_q_matrix <- matrix(NA, nrow = n, ncol = q,
-                            dimnames = list(NULL, paste0("class", 1:q)))
-
-    for (j in 1:q) {
-      post_q_matrix[, j] <- mapply(function(alpha_ij, row_sum_i) {
-        qbeta(probs, alpha_ij, row_sum_i - alpha_ij)
-      }, alpha_n[, j], row_sum)
-    }
+    post_q_matrix <- matrix(
+      qbeta(probs, as.vector(alpha_n), as.vector(beta_n)),
+      nrow = n,
+      ncol = q,
+      dimnames = list(NULL, paste0("class", 1:q))
+    )
 
     return(post_q_matrix)
   }

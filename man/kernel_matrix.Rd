@@ -8,8 +8,8 @@ kernel_matrix(
   X,
   Xprime = NULL,
   theta = 0.1,
-  kernel = c("gaussian", "matern52", "matern32"),
-  anisotropic = TRUE
+  kernel = c("gaussian", "matern52", "matern32", "wendland"),
+  isotropic = TRUE
 )
 }
 \arguments{
@@ -17,20 +17,22 @@ kernel_matrix(
 \times d}.}
 
 \item{Xprime}{An optional numeric matrix of input locations with shape \eqn{m
-  \times d}. If \code{NULL} (default), it is set to \code{X}, resulting in a
+\times d}. If \code{NULL} (default), it is set to \code{X}, resulting in a
 symmetric matrix.}
 
 \item{theta}{A positive numeric value or vector specifying the kernel
-lengthscale(s). If a scalar, the same lengthscale is applied to all input
-dimensions. If a vector, it must be of length \code{d}, corresponding to
-anisotropic scaling.}
+lengthscale(s). If \code{isotropic = TRUE} (default), this must be a
+scalar shared by all input dimensions. If \code{isotropic = FALSE}, this
+can be a scalar (broadcasted) or a vector of length \code{d} for
+per-dimension scaling.}
 
 \item{kernel}{A character string specifying the kernel function. Must be one
-of \code{"gaussian"}, \code{"matern32"}, or \code{"matern52"}.}
+of \code{"gaussian"}, \code{"matern52"}, \code{"matern32"}, or
+\code{"wendland"}.}
 
-\item{anisotropic}{Logical. If \code{TRUE} (default), \code{theta} is
-interpreted as a vector of per-dimension lengthscales. If \code{FALSE},
-\code{theta} is treated as a scalar.}
+\item{isotropic}{Logical. If \code{TRUE} (default), use a single shared
+lengthscale across dimensions. If \code{FALSE}, use per-dimension
+lengthscales.}
 }
 \value{
 A numeric matrix of size \eqn{n \times m}, where each element
@@ -40,56 +42,91 @@ A numeric matrix of size \eqn{n \times m}, where each element
 \description{
 Computes the kernel matrix between two sets of input locations
 using a specified kernel function. Supports both isotropic and anisotropic
-lengthscales. Available kernels include the Gaussian, Matérn 5/2, and
-Matérn 3/2.
+lengthscales. Available kernels include the Gaussian, Matérn 5/2,
+Matérn 3/2, and Wendland compactly supported kernel.
 }
 \details{
-Let \eqn{\mathbf{x}} and \eqn{\mathbf{x}'} denote two input points.
-The scaled distance is defined as
+Let \eqn{\mathbf{x}} and \eqn{\mathbf{x}^{\prime}} denote two input
+points. The scaled Euclidean distance is
 \deqn{
-     r = \left\| \frac{\mathbf{x} - \mathbf{x}'}{\boldsymbol{\theta}} \right\|_2.
+    h(\mathbf{x}, \mathbf{x}^{\prime}; \boldsymbol{\theta}) =
+    \left\|
+      \frac{\mathbf{x} - \mathbf{x}^{\prime}}{\boldsymbol{\theta}}
+    \right\|_2.
   }
+For isotropic kernels, \eqn{\boldsymbol{\theta}} is a scalar shared by all
+input dimensions. For anisotropic kernels, \eqn{\boldsymbol{\theta}} is a
+vector of dimension-specific lengthscales.
 
-The available kernels are defined as:
+The available kernels are
 \itemize{
 \item \strong{Gaussian:}
 \deqn{
-       k(\mathbf{x}, \mathbf{x}') = \exp(-r^2)
-     }
+      k(\mathbf{x}, \mathbf{x}^{\prime}) = \exp(-h^2).
+    }
 \item \strong{Matérn 5/2:}
 \deqn{
-       k(\mathbf{x}, \mathbf{x}') = \left(1 + \sqrt{5} r + \frac{5}{3} r^2 \right) \exp(-\sqrt{5} r)
-     }
+      k(\mathbf{x}, \mathbf{x}^{\prime}) =
+      \left(1 + \sqrt{5}h + \frac{5}{3}h^2\right)
+      \exp(-\sqrt{5}h).
+    }
 \item \strong{Matérn 3/2:}
 \deqn{
-       k(\mathbf{x}, \mathbf{x}') = \left(1 + \sqrt{3} r \right) \exp(-\sqrt{3} r)
-     }
+      k(\mathbf{x}, \mathbf{x}^{\prime}) =
+      \left(1 + \sqrt{3}h\right)\exp(-\sqrt{3}h).
+    }
+\item \strong{Wendland:}
+\deqn{
+      k(\mathbf{x}, \mathbf{x}^{\prime}) =
+      (\zeta h + 1)\max(0, 1 - h)^{\zeta},
+      \qquad \zeta = \lfloor d/2 \rfloor + 3.
+    }
 }
 
-The function performs consistency checks on input dimensions and
-automatically broadcasts \code{theta} when it is a scalar.
+The returned matrix has one row for each row of \code{X} and one column for
+each row of \code{Xprime}. If \code{Xprime = NULL}, the function returns the
+symmetric kernel matrix for \code{X}.
 }
 \examples{
-# Basic usage with default Xprime = X
+set.seed(123)
+
 X <- matrix(runif(20), ncol = 2)
-K1 <- kernel_matrix(X, theta = 0.2, kernel = "gaussian")
 
-# Anisotropic lengthscales with Matérn 5/2
-K2 <- kernel_matrix(X, theta = c(0.1, 0.3), kernel = "matern52")
+# Compute kernel matrices for all implemented kernels
+kernels <- c("gaussian", "matern52", "matern32", "wendland")
+K_list <- lapply(kernels, function(k) {
+  kernel_matrix(X, theta = 0.2, kernel = k)
+})
+names(K_list) <- kernels
 
-# Isotropic Matérn 3/2
-K3 <- kernel_matrix(X, theta = 1, kernel = "matern32", anisotropic = FALSE)
+# Inspect part of the Gaussian and Wendland kernel matrices
+K_list$gaussian[1:3, 1:3]
+K_list$wendland[1:3, 1:3]
 
-# Use Xprime different from X
+# Anisotropic lengthscales
+K_aniso <- kernel_matrix(
+  X,
+  theta = c(0.1, 0.3),
+  kernel = "matern52",
+  isotropic = FALSE
+)
+
+# Cross-kernel matrix between two input sets
 Xprime <- matrix(runif(10), ncol = 2)
-K4 <- kernel_matrix(X, Xprime, theta = 0.2, kernel = "gaussian")
+K_cross <- kernel_matrix(X, Xprime, theta = 0.2, kernel = "gaussian")
+dim(K_cross)
 
 }
 \references{
 Zhao J, Qing K, Xu J (2025). \emph{BKP: An R Package for Beta
-Kernel Process Modeling}.  arXiv.
-https://doi.org/10.48550/arXiv.2508.10447.
+Kernel Process Modeling}. arXiv. \url{doi:10.48550/arXiv.2508.10447}.
 
 Rasmussen, C. E., & Williams, C. K. I. (2006). \emph{Gaussian
 Processes for Machine Learning}. MIT Press.
+\url{https://gaussianprocess.org/gpml/}.
+
+Wendland, H. (1995). Piecewise polynomial, positive definite and compactly
+supported radial functions of minimal degree. \emph{Advances in
+Computational Mathematics}, 4(1), 389--396.
+\url{doi:10.1007/BF02123482}.
 }

@@ -29,7 +29,7 @@ test_that("summary.DKP returns a well-structured summary object with correct val
   Y <- t(sapply(1:n, function(i) rmultinom(1, size = m[i], prob = true_pi[i, ])))
 
   # Fit DKP model (this will be the object to test)
-  model <- fit_DKP(X, Y, Xbounds = Xbounds)
+  model <- fit_DKP(X, Y, Xbounds = Xbounds, theta = 0.3)
 
   # -------------------------------------------------------------------------
   # Test Cases
@@ -46,7 +46,7 @@ test_that("summary.DKP returns a well-structured summary object with correct val
 
   # Check for all expected named elements, adjusted for the current function's output
   # NOTE: The test now expects 'n_class' instead of 'output_dim'
-  expected_names <- c("n_obs", "input_dim", "n_class", "kernel", "theta_opt", "loss",
+  expected_names <- c("n_obs", "input_dim", "n_class", "kernel", "isotropic", "theta_opt", "loss",
                       "loss_min", "prior", "r0", "p0", "post_mean", "post_var")
   expect_named(summary_obj, expected_names)
 
@@ -62,6 +62,7 @@ test_that("summary.DKP returns a well-structured summary object with correct val
 
   # Dynamically check kernel and loss type from the fitted model object
   expect_equal(summary_obj$kernel, model$kernel)
+  expect_equal(summary_obj$isotropic, model$isotropic)
   expect_equal(summary_obj$loss, model$loss)
 
   # Check if theta_opt is a numeric vector

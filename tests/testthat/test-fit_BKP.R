@@ -16,7 +16,7 @@ test_that("fit_BKP runs correctly with examples from the documentation", {
   m <- sample(100, n, replace = TRUE)
   y <- rbinom(n, size = m, prob = true_pi)
 
-  expect_no_error({model1 <- fit_BKP(X, y, m, Xbounds=Xbounds)})
+  expect_no_error({model1 <- fit_BKP(X, y, m, Xbounds=Xbounds, theta = 0.3)})
   expect_s3_class(model1, "BKP")
 
   # --- 2D Example ---
@@ -42,7 +42,7 @@ test_that("fit_BKP runs correctly with examples from the documentation", {
   m <- sample(100, n, replace = TRUE)
   y <- rbinom(n, size = m, prob = true_pi)
 
-  expect_no_error({model2 <- fit_BKP(X, y, m, Xbounds=Xbounds)})
+  expect_no_error({model2 <- fit_BKP(X, y, m, Xbounds=Xbounds, theta = 0.3)})
   expect_s3_class(model2, "BKP")
 })
 
@@ -89,22 +89,27 @@ test_that("fit_BKP returns a BKP object with correct structure and content", {
   y_test <- rbinom(n, size = 100, prob = 0.5)
   m_test <- rep(100, n)
 
-  model <- fit_BKP(X=X_test, y=y_test, m=m_test)
+  model <- fit_BKP(X=X_test, y=y_test, m=m_test, theta = 0.3)
 
   # Check class and structure
   expect_s3_class(model, "BKP")
   expect_true(is.list(model))
-  expect_equal(names(model), c("theta_opt", "kernel", "loss", "loss_min", "X", "Xnorm", "Xbounds", "y", "m", "prior", "r0", "p0", "alpha0", "beta0", "alpha_n", "beta_n"))
+  expect_equal(names(model), c(
+    "theta_opt", "kernel", "isotropic", "loss", "loss_min",
+    "X", "Xnorm", "Xbounds", "y", "m", "prior", "r0", "p0", "alpha0", "beta0",
+    "alpha_n", "beta_n", "ess", "ess_info"
+    ))
 
   # Check content
   expect_equal(model$loss, "brier")
+  expect_equal(model$ess, "none")
   expect_equal(model$prior, "noninformative")
   expect_equal(model$X, X_test)
   expect_equal(dim(model$Xnorm), dim(X_test))
 })
 
 test_that("fit_BKP uses user-provided theta and skips optimization", {
-  user_theta <- c(0.1, 0.5)
+  user_theta <- 0.1
   n <- 10
   d <- 2
   X_test <- matrix(runif(n * d), nrow = n)
@@ -114,4 +119,136 @@ test_that("fit_BKP uses user-provided theta and skips optimization", {
   model <- fit_BKP(X=X_test, y=y_test, m=m_test, theta = user_theta)
 
   expect_equal(model$theta_opt, user_theta)
+})
+
+
+test_that("fit_BKP supports isotropic lengthscale", {
+  n <- 10
+  d <- 2
+  X_test <- matrix(runif(n * d), nrow = n)
+  y_test <- rbinom(n, size = 100, prob = 0.5)
+  m_test <- rep(100, n)
+
+  model <- fit_BKP(X = X_test, y = y_test, m = m_test, theta = 0.2, isotropic = TRUE)
+  expect_equal(model$theta_opt, 0.2)
+
+  expect_error(
+    fit_BKP(X = X_test, y = y_test, m = m_test, theta = c(0.2, 0.3), isotropic = TRUE),
+    "When isotropic=TRUE, 'theta' must be a scalar."
+  )
+})
+
+test_that("fit_BKP validates extended argument branches", {
+  set.seed(42)
+  X <- matrix(runif(18, min = -0.2, max = 1.2), ncol = 3)
+  y <- rbinom(nrow(X), size = 5, prob = 0.5)
+  m <- rep(5, nrow(X))
+
+  expect_warning(
+    expect_s3_class(fit_BKP(X, y, m, theta = 0.3), "BKP"),
+    "Input X does not appear to be normalized to \\[0,1\\]"
+  )
+
+  expect_error(
+    fit_BKP(X, y, m, Xbounds = matrix(c(0, 0, 1, 0.5, 0.4, 0.4), ncol = 2, byrow = TRUE)),
+    "Each row of 'Xbounds' must satisfy lower < upper"
+  )
+
+  X <- matrix(runif(18, min = 0, max = 1), ncol = 3)
+  y <- rbinom(nrow(X), size = 5, prob = 0.5)
+  m <- rep(5, nrow(X))
+  expect_error(fit_BKP(X, y, m, r0 = 0), "'r0' must be a positive scalar")
+  expect_error(fit_BKP(X, y, m, theta = 0.3, prior = "fixed", p0 = 1),
+               "For fixed prior in BKP, 'p0' must be a scalar in \\(0, 1\\).")
+  expect_error(fit_BKP(X, y, m, n_multi_start = 0), "'n_multi_start' must be a positive integer")
+  expect_error(fit_BKP(X, y, m, theta = "bad"), "'theta' must be numeric")
+  expect_error(fit_BKP(X, y, m, theta = c(0.2, 0.3), isotropic = TRUE), "When isotropic=TRUE")
+  expect_error(fit_BKP(X, y, m, theta = c(0.2, 0.3), isotropic = FALSE), "length 3")
+  expect_error(fit_BKP(X, y, m, theta = -0.2), "'theta' must be strictly positive")
+  expect_error(fit_BKP(X, y, m, isotropic = c(TRUE, FALSE)), "'isotropic' must be a single logical value")
+})
+
+test_that("ess = 'none' matches the standard BKP posterior update", {
+  X <- matrix(c(0.05, 0.20, 0.45, 0.70, 0.90), ncol = 1)
+  m <- c(10, 20, 15, 25, 30)
+  y <- c(2, 12, 7, 15, 21)
+
+  model <- fit_BKP(X, y, m, theta = 0.3, ess = "none")
+  K <- kernel_matrix(model$Xnorm, theta = model$theta_opt,
+                     kernel = model$kernel, isotropic = model$isotropic)
+  prior_par <- get_prior(prior = model$prior, model = "BKP",
+                         r0 = model$r0, p0 = model$p0,
+                         y = model$y, m = model$m, K = K)
+
+  expect_equal(model$ess, "none")
+  expect_equal(model$alpha_n, prior_par$alpha0 + as.vector(K %*% model$y))
+  expect_equal(model$beta_n, prior_par$beta0 + as.vector(K %*% (model$m - model$y)))
+
+  pred_train <- predict(model)
+  pred_new <- predict(model, Xnew = matrix(c(0.15, 0.55), ncol = 1))
+  expect_equal(pred_train$ess, "none")
+  expect_equal(pred_new$ess, "none")
+  expect_equal(pred_train$ess_info$scale, rep(1, length(m)))
+  expect_equal(pred_new$ess_info$scale, rep(1, 2))
+})
+
+test_that("Shepard ESS targets observed trial sizes at training points", {
+  X <- matrix(c(0.02, 0.18, 0.44, 0.73, 0.96), ncol = 1)
+  m <- c(8, 17, 11, 23, 31)
+  y <- c(3, 8, 4, 15, 22)
+
+  model <- fit_BKP(X, y, m, theta = 0.25, ess = "shepard")
+  data_size <- model$alpha_n + model$beta_n - model$alpha0 - model$beta0
+
+  expect_equal(as.vector(data_size), as.numeric(m), tolerance = 1e-10)
+  expect_equal(model$ess_info$m_shepard, as.numeric(m), tolerance = 1e-10)
+})
+
+test_that("Shepard ESS preserves the kernel-weighted empirical success proportion", {
+  X <- matrix(c(0.10, 0.15, 0.35, 0.60, 0.85, 0.95), ncol = 2, byrow = TRUE)
+  m <- c(10, 12, 18)
+  y <- c(4, 9, 7)
+
+  model <- fit_BKP(X, y, m, theta = 0.4, ess = "shepard")
+  K <- kernel_matrix(model$Xnorm, theta = model$theta_opt,
+                     kernel = model$kernel, isotropic = model$isotropic)
+  raw_success <- as.vector(K %*% model$y)
+  raw_trials <- as.vector(K %*% model$m)
+  c_scale <- model$ess_info$scale
+
+  positive <- raw_trials > 0
+  expect_equal(
+    raw_success[positive] / raw_trials[positive],
+    (c_scale[positive] * raw_success[positive]) /
+      (c_scale[positive] * raw_trials[positive]),
+    tolerance = 1e-12
+  )
+})
+
+test_that("predict works for Shepard ESS at new points without NA values", {
+  X <- matrix(c(0.05, 0.25, 0.50, 0.80), ncol = 1)
+  m <- c(10, 20, 15, 30)
+  y <- c(2, 11, 8, 21)
+  Xnew <- matrix(c(0.10, 0.40, 0.65, 0.90), ncol = 1)
+
+  model <- fit_BKP(X, y, m, theta = 0.35, ess = "shepard")
+  pred <- predict(model, Xnew = Xnew)
+
+  expect_false(anyNA(pred$alpha_n))
+  expect_false(anyNA(pred$beta_n))
+  expect_false(anyNA(pred$mean))
+  expect_true(all(is.finite(pred$alpha_n)))
+  expect_true(all(is.finite(pred$beta_n)))
+  expect_true(all(is.finite(pred$mean)))
+})
+
+test_that("Shepard ESS rejects duplicated input locations", {
+  X <- matrix(c(0.10, 0.20, 0.10, 0.20, 0.75, 0.90), ncol = 2, byrow = TRUE)
+  m <- c(10, 20, 15)
+  y <- c(4, 9, 7)
+
+  expect_error(
+    fit_BKP(X, y, m, theta = 0.3, ess = "shepard"),
+    "requires unique input locations"
+  )
 })

@@ -10,14 +10,22 @@ test_that("plot.BKP generates plots without errors", {
   # Test Case 1: 1D Input
   # -------------------------------------------------------------------------
 
-  d <- 1
-  n <- 50
-  X <- matrix(runif(n * d), n, d)
-  y <- rbinom(n, size = 10, prob = 0.5)
-  m <- rep(10, n)
+  set.seed(123)
+
+  # Define true success probability function
+  true_pi_fun <- function(x) {
+    (1 + exp(-x^2) * cos(10 * (1 - exp(-x)) / (1 + exp(-x)))) / 2
+  }
+
+  n <- 30
+  Xbounds <- matrix(c(-2,2), nrow=1)
+  X <- tgp::lhs(n = n, rect = Xbounds)
+  true_pi <- true_pi_fun(X)
+  m <- sample(100, n, replace = TRUE)
+  y <- rbinom(n, size = m, prob = true_pi)
 
   # Fit a 1D BKP model
-  model_1d <- fit_BKP(X, y, m, prior = "noninformative")
+  model_1d <- fit_BKP(X, y, m, Xbounds=Xbounds, theta = 0.3, prior = "noninformative")
 
   # Test that plot() runs without errors for a 1D model
   expect_no_error(plot(model_1d))
@@ -26,14 +34,33 @@ test_that("plot.BKP generates plots without errors", {
   # Test Case 2: 2D Input
   # -------------------------------------------------------------------------
 
-  d <- 2
-  n <- 50
-  X <- matrix(runif(n * d), n, d)
-  y <- rbinom(n, size = 10, prob = 0.5)
-  m <- rep(10, n)
+  set.seed(123)
+
+  # Define 2D latent function and probability transformation
+  true_pi_fun <- function(X) {
+    if(is.null(nrow(X))) X <- matrix(X, nrow=1)
+    m <- 8.6928
+    s <- 2.4269
+    x1 <- 4*X[,1]- 2
+    x2 <- 4*X[,2]- 2
+    a <- 1 + (x1 + x2 + 1)^2 *
+      (19- 14*x1 + 3*x1^2- 14*x2 + 6*x1*x2 + 3*x2^2)
+    b <- 30 + (2*x1- 3*x2)^2 *
+      (18- 32*x1 + 12*x1^2 + 48*x2- 36*x1*x2 + 27*x2^2)
+    f <- log(a*b)
+    f <- (f- m)/s
+    return(pnorm(f))  # Transform to probability
+  }
+
+  n <- 100
+  Xbounds <- matrix(c(0, 0, 1, 1), nrow = 2)
+  X <- tgp::lhs(n = n, rect = Xbounds)
+  true_pi <- true_pi_fun(X)
+  m <- sample(100, n, replace = TRUE)
+  y <- rbinom(n, size = m, prob = true_pi)
 
   # Fit a 2D BKP model
-  model_2d <- fit_BKP(X, y, m, prior = "fixed", r0 = 10, p0 = 0.5)
+  model_2d <- fit_BKP(X, y, m, Xbounds=Xbounds, theta = 0.3, prior = "fixed", r0 = 10, p0 = 0.5)
 
   # Test with default arguments
   expect_no_error(plot(model_2d, n_grid = 30))
@@ -50,15 +77,55 @@ test_that("plot.BKP generates plots without errors", {
   d <- 3
   n <- 50
   X <- matrix(runif(n * d), n, d)
-  y <- rbinom(n, size = 10, prob = 0.5)
-  m <- rep(10, n)
+  m <- sample(100, n, replace = TRUE)
+  y <- rbinom(n, size = m, prob = runif(n))
 
   # Fit a 2D BKP model
-  model_2d <- fit_BKP(X, y, m, prior = "fixed", r0 = 10, p0 = 0.5)
+  model_2d <- fit_BKP(X, y, m, theta = 0.3, prior = "fixed", r0 = 10, p0 = 0.5)
 
   # Test with default arguments
   expect_no_error(plot(model_2d, dims = c(1,3), n_grid = 10))
 
   # Test with only_mean = TRUE
   expect_no_error(plot(model_2d, only_mean = TRUE, dims = c(1,3), n_grid = 10))
+})
+
+test_that("plot.BKP validates input arguments and classification branches", {
+  set.seed(99)
+
+  X <- matrix(runif(40), ncol = 2)
+  m <- rep(1, nrow(X))
+  y <- rbinom(nrow(X), size = 1, prob = 0.5)
+  model <- fit_BKP(X, y, m, theta = 0.3, prior = "noninformative")
+
+  expect_no_error(plot(model, dims = 1, threshold = 0.4, n_grid = 8))
+  expect_no_error(plot(model, dims = c(1, 2), threshold = 0.4, n_grid = 8))
+  expect_error(plot(model, only_mean = c(TRUE, FALSE)), "`only_mean` must be a single logical value")
+  expect_error(plot(model, n_grid = 0), "'n_grid' must be a positive integer")
+  expect_error(plot(model, dims = c(1.5, 2)), "`dims` must be an integer vector")
+  expect_error(plot(model, dims = integer(0)), "`dims` must have length 1 or 2")
+  expect_error(plot(model, dims = c(1, 1)), "`dims` cannot contain duplicate indices")
+  expect_error(plot(model, dims = 3), "must be within the range")
+})
+
+
+test_that("plot.BKP supports ggplot engine for 1D/2D and validates engine", {
+  set.seed(2026)
+  skip_if_not_installed("ggplot2")
+
+  X1 <- matrix(runif(40), ncol = 1)
+  m1 <- rep(10, nrow(X1))
+  y1 <- rbinom(nrow(X1), size = m1, prob = 0.5)
+  model1 <- fit_BKP(X1, y1, m1, prior = "noninformative", theta = 0.3)
+  expect_no_error(plot(model1, n_grid = 8, engine = "ggplot"))
+
+  X <- matrix(runif(60), ncol = 2)
+  m <- rep(10, nrow(X))
+  y <- rbinom(nrow(X), size = m, prob = 0.5)
+  model <- fit_BKP(X, y, m, theta = 0.3, prior = "noninformative")
+
+  expect_no_error(plot(model, n_grid = 8, engine = "ggplot"))
+  expect_error(plot(model, engine = "bad_engine"),
+               regexp = "one of.*base.*ggplot",
+               ignore.case = TRUE)
 })

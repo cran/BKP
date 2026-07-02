@@ -23,7 +23,7 @@ test_that("simulate.BKP returns correct posterior simulations and dimensions", {
   y <- rbinom(n, size = m, prob = true_pi)
 
   # Fit BKP model (this will be the object to test)
-  model <- fit_BKP(X, y, m, Xbounds = Xbounds)
+  model <- fit_BKP(X, y, m, Xbounds = Xbounds, theta = 0.3)
 
   # -------------------------------------------------------------------------
   # Test Cases
@@ -91,7 +91,7 @@ test_that("simulate.BKP handles input validation correctly", {
   true_pi <- true_pi_fun(X)
   m <- sample(100, n, replace = TRUE)
   y <- rbinom(n, size = m, prob = true_pi)
-  model <- fit_BKP(X, y, m, Xbounds = Xbounds)
+  model <- fit_BKP(X, y, m, Xbounds = Xbounds, theta = 0.3)
 
   # Case 5: Input validation tests
   # nsim must be a positive integer
@@ -100,9 +100,25 @@ test_that("simulate.BKP handles input validation correctly", {
   expect_error(simulate(model, nsim = 5.5), "`nsim` must be a positive integer.")
 
   # threshold must be a single numeric value in (0, 1)
-  expect_error(simulate(model, threshold = 1.1), "`threshold` must be a numeric value strictly between 0 and 1 (e.g., 0.5).", fixed = TRUE)
-  expect_error(simulate(model, threshold = c(0.1, 0.9)), "`threshold` must be a numeric value strictly between 0 and 1 (e.g., 0.5).", fixed = TRUE)
+  expect_error(simulate(model, threshold = 1.1), "'threshold' must be a single finite numeric value strictly between 0 and 1.", fixed = TRUE)
+  expect_error(simulate(model, threshold = c(0.1, 0.9)), "'threshold' must be a single finite numeric value strictly between 0 and 1.", fixed = TRUE)
 
   # Xnew must be a matrix
   expect_error(simulate(model, Xnew = "invalid"), "'Xnew' must be numeric.")
+})
+
+test_that("simulate.BKP uses Shepard ESS posterior parameters at new inputs", {
+  set.seed(2026)
+  X <- matrix(seq(0.05, 0.95, length.out = 12), ncol = 1)
+  m <- rep(20, nrow(X))
+  y <- rbinom(nrow(X), size = m, prob = plogis(4 * X[, 1] - 2))
+  fit <- fit_BKP(X, y, m, theta = 0.4, ess = "shepard", prior = "fixed", r0 = 2, p0 = 0.5)
+  Xnew <- matrix(c(0.15, 0.55, 0.9), ncol = 1)
+
+  pred <- predict(fit, Xnew = Xnew, type = "probability")
+  sim <- simulate(fit, Xnew = Xnew, nsim = 2, seed = 1)
+
+  expect_equal(sim$mean, pred$mean)
+  expect_equal(sim$ess, pred$ess)
+  expect_equal(sim$ess_info$scale, pred$ess_info$scale)
 })

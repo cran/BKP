@@ -25,7 +25,7 @@ test_that("predict.BKP generates predictions without errors for various priors",
   y <- rbinom(n, size = m, prob = true_pi)
 
   # Fit BKP model with noninformative prior
-  model_noninformative <- fit_BKP(X, y, m, prior = "noninformative", Xbounds = Xbounds)
+  model_noninformative <- fit_BKP(X, y, m, theta = 0.3, prior = "noninformative", Xbounds = Xbounds)
 
   # Define new prediction locations
   Xnew <- matrix(seq(-2, 2, length.out = 100), ncol = 1)
@@ -48,7 +48,7 @@ test_that("predict.BKP generates predictions without errors for various priors",
   # Test Case 2: Fixed Prior
   # -------------------------------------------------------------------------
 
-  model_fixed <- fit_BKP(X, y, m, prior = "fixed", r0 = 10, p0 = 0.5, Xbounds = Xbounds)
+  model_fixed <- fit_BKP(X, y, m, theta = 0.3, prior = "fixed", r0 = 10, p0 = 0.5, Xbounds = Xbounds)
 
   pred_train_fixed <- predict(model_fixed)
   expect_no_error(predict(model_fixed))
@@ -63,7 +63,7 @@ test_that("predict.BKP generates predictions without errors for various priors",
   # Test Case 3: Adaptive Prior
   # -------------------------------------------------------------------------
 
-  model_adaptive <- fit_BKP(X, y, m, prior = "adaptive", Xbounds = Xbounds)
+  model_adaptive <- fit_BKP(X, y, m, theta = 0.3, prior = "adaptive", Xbounds = Xbounds)
 
   pred_train_adaptive <- predict(model_adaptive)
   expect_no_error(predict(model_adaptive))
@@ -73,4 +73,44 @@ test_that("predict.BKP generates predictions without errors for various priors",
   expect_no_error(predict(model_adaptive, Xnew))
   expect_equal(length(pred_new_adaptive$mean), nrow(Xnew))
   expect_true(all(pred_new_adaptive$lower <= pred_new_adaptive$upper))
+})
+
+test_that("test-predict_BKP validation and classification branches", {
+  set.seed(2026)
+  X <- matrix(runif(20), ncol = 2)
+  y <- rbinom(nrow(X), 1, 0.5)
+  m <- rep(1, nrow(X))
+  model <- fit_BKP(X, y, m, theta = 0.3, prior = "noninformative")
+
+  pred_train <- predict(model)
+  expect_true(!is.null(pred_train$class))
+  expect_true(all(pred_train$class %in% c(0, 1)))
+
+  pred_new_vec <- predict(model, Xnew = c(0.2, 0.8), threshold = 0.3)
+  expect_equal(length(pred_new_vec$mean), 1)
+  expect_true(!is.null(pred_new_vec$threshold))
+
+  expect_error(predict(model, Xnew = matrix(letters[1:4], ncol = 2)), "'Xnew' must be numeric.")
+  expect_error(predict(model, Xnew = matrix(runif(3), ncol = 3)), "The number of columns in 'Xnew' must match the original input dimension.")
+  expect_error(predict(model, CI_level = 1), "'CI_level' must be a single finite numeric value strictly between 0 and 1.")
+  expect_error(predict(model, threshold = 0), "'threshold' must be a single finite numeric value strictly between 0 and 1.")
+
+  m2 <- rep(2, nrow(X))
+  y2 <- rbinom(nrow(X), m2, 0.5)
+  model_count <- fit_BKP(X, y2, m2, theta = 0.3, prior = "fixed", r0 = 4, p0 = 0.5)
+  pred_count <- predict(model_count)
+  expect_true(is.null(pred_count$class))
+})
+
+test_that("BKP count predictions have legal intervals", {
+  set.seed(2026)
+  X <- matrix(runif(20), ncol = 2)
+  m <- rep(12, nrow(X))
+  y <- rbinom(nrow(X), size = m, prob = 0.4)
+  fit <- fit_BKP(X, y, m, theta = 0.3, prior = "fixed", r0 = 3, p0 = 0.4)
+  pred <- predict(fit, Xnew = X[1:4, ], type = "count", Mnew = 20)
+
+  expect_true(all(pred$lower >= 0))
+  expect_true(all(pred$upper <= 20))
+  expect_true(all(pred$lower <= pred$upper))
 })

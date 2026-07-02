@@ -33,7 +33,7 @@ test_that("predict.DKP generates predictions without errors for various priors",
   colnames(Y) <- paste0("class", 1:3)
 
   # Fit DKP model with noninformative prior
-  model_noninformative <- fit_DKP(X, Y, Xbounds = Xbounds, prior = "noninformative")
+  model_noninformative <- fit_DKP(X, Y, Xbounds = Xbounds, theta = 0.3, prior = "noninformative")
 
   # Define new prediction locations
   Xnew <- matrix(seq(-2, 2, length.out = 100), ncol = 1)
@@ -60,7 +60,7 @@ test_that("predict.DKP generates predictions without errors for various priors",
   # -------------------------------------------------------------------------
 
   p0 <- c(0.2, 0.3, 0.5)
-  model_fixed <- fit_DKP(X, Y, Xbounds = Xbounds, prior = "fixed", r0 = 10, p0 = p0)
+  model_fixed <- fit_DKP(X, Y, Xbounds = Xbounds, theta = 0.3, prior = "fixed", r0 = 10, p0 = p0)
 
   pred_train_fixed <- predict(model_fixed)
   expect_no_error(predict(model_fixed))
@@ -75,7 +75,7 @@ test_that("predict.DKP generates predictions without errors for various priors",
   # Test Case 3: Adaptive Prior
   # -------------------------------------------------------------------------
 
-  model_adaptive <- fit_DKP(X, Y, Xbounds = Xbounds, prior = "adaptive")
+  model_adaptive <- fit_DKP(X, Y, Xbounds = Xbounds, theta = 0.3, prior = "adaptive")
 
   pred_train_adaptive <- predict(model_adaptive)
   expect_no_error(predict(model_adaptive))
@@ -85,4 +85,48 @@ test_that("predict.DKP generates predictions without errors for various priors",
   expect_no_error(predict(model_adaptive, Xnew))
   expect_equal(nrow(pred_new_adaptive$mean), nrow(Xnew))
   expect_equal(ncol(pred_new_adaptive$mean), ncol(Y))
+})
+
+test_that("test-predict_DKP validation and class output branches", {
+  set.seed(2026)
+  X <- matrix(runif(24), ncol = 2)
+  Y <- matrix(0, nrow(X), 3)
+  cls <- sample(1:3, nrow(X), replace = TRUE)
+  Y[cbind(seq_len(nrow(X)), cls)] <- 1
+
+  model <- fit_DKP(X, Y, theta = 0.3, prior = "fixed", r0 = 3, p0 = c(0.2, 0.3, 0.5))
+
+  pred_train <- predict(model)
+  expect_true(!is.null(pred_train$class))
+  expect_true(all(pred_train$class %in% 1:3))
+
+  pred_new_vec <- predict(model, Xnew = c(0.4, 0.6), CI_level = 0.9)
+  expect_equal(nrow(pred_new_vec$mean), 1)
+  expect_equal(ncol(pred_new_vec$mean), 3)
+
+  expect_error(predict(model, Xnew = matrix(letters[1:4], ncol = 2)), "'Xnew' must be numeric.")
+  expect_error(predict(model, Xnew = matrix(runif(3), ncol = 3)), "The number of columns in 'Xnew' must match the original input dimension.")
+  expect_error(predict(model, CI_level = 0), "'CI_level' must be a single finite numeric value strictly between 0 and 1.")
+
+  Y_count <- matrix(sample(0:2, nrow(X) * 3, replace = TRUE), ncol = 3)
+  Y_count[rowSums(Y_count) == 0, 1] <- 1
+  model_count <- fit_DKP(X, Y_count, theta = 0.3, prior = "adaptive")
+  pred_count <- predict(model_count)
+  expect_true(is.null(pred_count$class))
+})
+
+test_that("DKP count predictions have legal intervals and dimensions", {
+  set.seed(2027)
+  X <- matrix(runif(24), ncol = 2)
+  Y <- t(vapply(seq_len(nrow(X)), function(i) {
+    as.vector(rmultinom(1, size = 12, prob = c(0.2, 0.3, 0.5)))
+  }, numeric(3)))
+  fit <- fit_DKP(X, Y, theta = 0.3, prior = "fixed", r0 = 3, p0 = rep(1 / 3, 3))
+  pred <- predict(fit, Xnew = X[1:4, ], type = "count", Mnew = 20)
+
+  expect_equal(dim(pred$lower), c(4, 3))
+  expect_equal(dim(pred$upper), c(4, 3))
+  expect_true(all(pred$lower >= 0))
+  expect_true(all(pred$upper <= 20))
+  expect_true(all(pred$lower <= pred$upper))
 })
