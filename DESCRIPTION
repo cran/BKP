@@ -1,6 +1,6 @@
 Package: BKP
 Title: Beta Kernel Process Modeling
-Version: 0.3.0
+Version: 0.3.1
 Authors@R: c(
     person(given = "Jiangyan", family = "Zhao", email = "zhaojy2017@126.com", role = c("cre", "aut")),
     person(given = "Kunhai", family = "Qing", email = "kunhaiq@qq.com", role = "aut"),
@@ -20,7 +20,8 @@ Description: Implements the Beta Kernel Process (BKP) for nonparametric modeling
  For more details, see Zhao, Qing, and Xu (2025) <doi:10.48550/arXiv.2508.10447>.
 License: GPL (>= 3)
 Copyright: See inst/COPYRIGHTS
-URL: https://github.com/Jiangyan-Zhao/BKP
+URL: https://github.com/Jiangyan-Zhao/BKP,
+        https://github.com/Jiangyan-Zhao/BKP-paper
 BugReports: https://github.com/Jiangyan-Zhao/BKP/issues
 Encoding: UTF-8
 NeedsCompilation: yes
@@ -30,9 +31,9 @@ Suggests: knitr, mlbench, testthat (>= 3.0.0)
 Config/testthat/edition: 3
 LinkingTo: Rcpp, RcppArmadillo, nloptr
 Config/roxygen2/version: 8.0.0
-Packaged: 2026-07-02 13:11:20 UTC; JYZHAO
+Packaged: 2026-07-13 09:32:34 UTC; JYZHAO
 Author: Jiangyan Zhao [cre, aut],
   Kunhai Qing [aut],
   Jin Xu [aut]
 Repository: CRAN
-Date/Publication: 2026-07-02 15:02:03 UTC
+Date/Publication: 2026-07-13 10:20:12 UTC
